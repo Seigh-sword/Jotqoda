@@ -37,6 +37,53 @@ export interface Settings {
   confirmDelete: boolean;
   showBreadcrumbs: boolean;
   typeCheck: boolean;
+  // editor (extended)
+  rulers: string;
+  wordWrapColumn: number;
+  fontWeight: 'normal' | '300' | '500' | '600' | 'bold';
+  letterSpacing: number;
+  cursorSurroundingLines: number;
+  multiCursorModifier: 'alt' | 'ctrlCmd';
+  renderControlCharacters: boolean;
+  occurrencesHighlight: boolean;
+  selectionHighlight: boolean;
+  autoClosingQuotes: boolean;
+  autoSurround: boolean;
+  links: boolean;
+  hover: boolean;
+  glyphMargin: boolean;
+  minimapSide: 'right' | 'left';
+  minimapRenderCharacters: boolean;
+  acceptSuggestionOnEnter: 'on' | 'smart' | 'off';
+  tabCompletion: 'off' | 'on' | 'onlySnippets';
+  wordBasedSuggestions: 'off' | 'currentDocument' | 'matchingDocuments' | 'allDocuments';
+  snippetSuggestions: 'top' | 'bottom' | 'inline' | 'none';
+  formatOnType: boolean;
+  copyWithSyntaxHighlighting: boolean;
+  // files
+  trimTrailingWhitespace: boolean;
+  insertFinalNewline: boolean;
+  trimFinalNewlines: boolean;
+  autoDetectLanguage: boolean;
+  localHistory: boolean;
+  localHistoryMax: number;
+  // formatting
+  prettier: boolean;
+  prettierPrintWidth: number;
+  prettierSemi: boolean;
+  prettierSingleQuote: boolean;
+  prettierTrailingComma: 'all' | 'es5' | 'none';
+  sqlKeywordCase: 'upper' | 'lower' | 'preserve';
+  emmet: boolean;
+  emmetJsx: boolean;
+  // workbench
+  sidebarPosition: 'left' | 'right';
+  activityBar: boolean;
+  statusBar: boolean;
+  centeredLayout: boolean;
+  terminalFontSize: number;
+  doNotDisturb: boolean;
+  keybindings: Record<string, string>;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -75,16 +122,70 @@ export const DEFAULT_SETTINGS: Settings = {
   confirmDelete: true,
   showBreadcrumbs: true,
   typeCheck: true,
+  rulers: '',
+  wordWrapColumn: 80,
+  fontWeight: 'normal',
+  letterSpacing: 0,
+  cursorSurroundingLines: 0,
+  multiCursorModifier: 'alt',
+  renderControlCharacters: true,
+  occurrencesHighlight: true,
+  selectionHighlight: true,
+  autoClosingQuotes: true,
+  autoSurround: true,
+  links: true,
+  hover: true,
+  glyphMargin: true,
+  minimapSide: 'right',
+  minimapRenderCharacters: false,
+  acceptSuggestionOnEnter: 'on',
+  tabCompletion: 'off',
+  wordBasedSuggestions: 'matchingDocuments',
+  snippetSuggestions: 'inline',
+  formatOnType: false,
+  copyWithSyntaxHighlighting: true,
+  trimTrailingWhitespace: false,
+  insertFinalNewline: false,
+  trimFinalNewlines: false,
+  autoDetectLanguage: true,
+  localHistory: true,
+  localHistoryMax: 30,
+  prettier: true,
+  prettierPrintWidth: 80,
+  prettierSemi: true,
+  prettierSingleQuote: false,
+  prettierTrailingComma: 'all',
+  sqlKeywordCase: 'upper',
+  emmet: true,
+  emmetJsx: false,
+  sidebarPosition: 'left',
+  activityBar: true,
+  statusBar: true,
+  centeredLayout: false,
+  terminalFontSize: 13,
+  doNotDisturb: false,
+  keybindings: {},
 };
 
-export interface Group { tabs: string[]; active: string | null }
+export interface Group { tabs: string[]; active: string | null; pinned?: string[] }
 export interface Commit { id: string; message: string; date: number; files: Record<string, string>; stats: { added: number; modified: number; deleted: number } }
 export interface OutputLine { id: number; type: LogType; text: string; time: number }
 export interface Problem { path: string; line: number; col: number; message: string; severity: 'error' | 'warning' | 'info' | 'todo'; source?: string }
-export interface Command { id: string; label: string; category: string; key?: string; hint?: string; run: () => void; when?: () => boolean }
-export type SidebarView = 'explorer' | 'search' | 'git' | 'run' | 'tools' | 'snippets' | 'extensions';
+export interface Command { id: string; label: string; category: string; key?: string; defaultKey?: string; hint?: string; run: () => void; when?: () => boolean }
+export type SidebarView = 'explorer' | 'search' | 'git' | 'run' | 'tools' | 'snippets' | 'extensions' | 'bookmarks';
 export type PanelTab = 'terminal' | 'output' | 'problems' | 'todos';
-export type PaletteMode = 'files' | 'commands' | 'line' | 'theme' | 'language' | 'template' | 'symbols';
+export type PaletteMode = 'files' | 'commands' | 'line' | 'theme' | 'language' | 'template' | 'symbols' | 'workspaceSymbols' | 'quickpick';
+
+export interface QuickPickItem { id?: string; label: string; description?: string; detail?: string; icon?: string; picked?: boolean; run?: () => void }
+export interface QuickPickRequest { placeholder?: string; items: QuickPickItem[]; resolve: (item: QuickPickItem | null) => void }
+export interface Notification { id: number; msg: string; type: 'info' | 'success' | 'error' | 'warn'; time: number; read: boolean }
+export interface HistoryEntry { id: string; time: number; content: string; source: string }
+/** A side of a comparison: workspace file, saved/HEAD version, local history snapshot, clipboard or literal text. */
+export interface CompareSide { label: string; path?: string; kind: 'file' | 'saved' | 'head' | 'history' | 'text'; content?: string }
+export interface CompareSpec { id: string; left: CompareSide; right: CompareSide; lang: string }
+export interface NavLocation { path: string; line: number; col: number }
+export interface Bookmark { path: string; line: number; label?: string }
+export interface TerminalRequest { id: number; cwd?: string; command?: string; newTerminal?: boolean }
 
 export interface IDE {
   files: Record<string, string>;
@@ -147,6 +248,50 @@ export interface IDE {
   setSettingsOpen: (b: boolean) => void;
   setShortcutsOpen: (b: boolean) => void;
   zen: boolean;
+  // navigation
+  revealAt: (path: string, line: number, col?: number, endLine?: number, endCol?: number) => void;
+  goBack: () => void;
+  goForward: () => void;
+  // tabs & groups
+  togglePin: (path: string, group: number) => void;
+  closeToRight: (path: string, group: number) => void;
+  closeSaved: (group?: number) => void;
+  reopenClosed: () => void;
+  moveTab: (path: string, from: number, to: number, before?: string | null) => void;
+  closeGroup: (group: number) => void;
+  joinGroups: () => void;
+  groupSizes: number[];
+  // compare
+  compares: Record<string, CompareSpec>;
+  openCompare: (left: CompareSide, right: CompareSide, lang?: string) => void;
+  compareTarget: string | null;
+  setCompareTarget: (p: string | null) => void;
+  // pickers & notifications
+  quickPick: (items: QuickPickItem[], placeholder?: string) => Promise<QuickPickItem | null>;
+  quickPickState: QuickPickRequest | null;
+  notifications: Notification[];
+  clearNotifications: () => void;
+  markNotificationsRead: () => void;
+  // local history
+  historyOf: (path: string) => HistoryEntry[];
+  snapshot: (path: string, source: string, content?: string) => void;
+  restoreSnapshot: (path: string, id: string) => void;
+  deleteSnapshot: (path: string, id?: string) => void;
+  historyVersion: number;
+  // workspace
+  downloadZip: (folder?: string) => void;
+  importZip: () => void;
+  importFolder: () => void;
+  formatDocument: (path?: string) => Promise<boolean>;
+  // terminal & search
+  terminalRequest: TerminalRequest | null;
+  requestTerminal: (req: Omit<TerminalRequest, 'id'>) => void;
+  searchRequest: { query?: string; include?: string; id: number } | null;
+  openSearch: (opts: { query?: string; include?: string }) => void;
+  // bookmarks
+  bookmarks: Bookmark[];
+  toggleBookmark: (path?: string, line?: number) => void;
+  clearBookmarks: (path?: string) => void;
 }
 
 export const IDEContext = createContext<IDE>(null as any);
@@ -160,4 +305,4 @@ export const normPath = (p: string) => {
   for (const s of p.split('/')) { if (!s || s === '.') continue; if (s === '..') out.pop(); else out.push(s); }
   return out.join('/');
 };
-export const isSpecialTab = (p: string) => p.startsWith('diff:') || p.startsWith('__');
+export const isSpecialTab = (p: string) => p.startsWith('diff:') || p.startsWith('cmp:') || p.startsWith('__');

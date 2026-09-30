@@ -1,76 +1,12 @@
-import { useState } from 'react';
-import { Play, Square, Search, Plus, Trash2, Zap, Check, Braces, Rows3, Pin, Grid2x2, Sparkles, Save, Link2, MousePointerClick, Tags, Palette, WrapText, Type, ZoomIn, Sigma, ChevronsDownUp, Download, Star } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Play, Square, Search, Plus, Trash2, Zap, Check, Braces, Rows3, Pin, Grid2x2, Sparkles, Save, Link2, MousePointerClick, Tags, Palette, WrapText, Type, ZoomIn, Sigma, ChevronsDownUp, Bookmark, Wand2, Highlighter, History, Scissors } from 'lucide-react';
 import { useIDE, basename, dirname, type Settings } from '../ide/types';
-import { getLang, RUNNABLE_INFO, LANGUAGES } from '../ide/languages';
+import { getLang, getLangById, RUNNABLE_INFO, LANGUAGES, CATEGORY_ORDER, RUNNABLE_LANGS, isExecutable, type LangDef } from '../ide/languages';
+import { formatterName } from '../ide/format';
 import { FileIcon } from './FileIcon';
 
-export const SNIPPETS: Record<string, { prefix: string; label: string; body: string }[]> = {
-  javascript: [
-    { prefix: 'log', label: 'console.log', body: "console.log('${1:label}', ${2:value});" },
-    { prefix: 'afn', label: 'Arrow function', body: 'const ${1:name} = (${2:params}) => {\n\t$0\n};' },
-    { prefix: 'asyncfn', label: 'Async function', body: 'async function ${1:name}(${2:params}) {\n\ttry {\n\t\t$0\n\t} catch (err) {\n\t\tconsole.error(err);\n\t}\n}' },
-    { prefix: 'fetchjson', label: 'Fetch JSON', body: "const res = await fetch('${1:https://api.example.com}');\nif (!res.ok) throw new Error(res.statusText);\nconst ${2:data} = await res.json();" },
-    { prefix: 'class', label: 'Class', body: 'class ${1:Name} {\n\tconstructor(${2:args}) {\n\t\t$0\n\t}\n}' },
-    { prefix: 'forof', label: 'for…of loop', body: 'for (const ${1:item} of ${2:items}) {\n\t$0\n}' },
-    { prefix: 'reduce', label: 'Array reduce', body: 'const ${1:result} = ${2:arr}.reduce((acc, ${3:x}) => {\n\t$0\n\treturn acc;\n}, ${4:{}});' },
-    { prefix: 'debounce', label: 'Debounce helper', body: 'function debounce(fn, ms = ${1:300}) {\n\tlet t;\n\treturn (...args) => {\n\t\tclearTimeout(t);\n\t\tt = setTimeout(() => fn(...args), ms);\n\t};\n}' },
-    { prefix: 'sleep', label: 'Sleep promise', body: 'const sleep = (ms) => new Promise((r) => setTimeout(r, ms));' },
-    { prefix: 'trycatch', label: 'try / catch', body: 'try {\n\t$1\n} catch (${2:err}) {\n\tconsole.error($2);\n}' },
-    { prefix: 'iife', label: 'Async IIFE', body: '(async () => {\n\t$0\n})();' },
-    { prefix: 'rfc', label: 'React component', body: "export function ${1:Component}({ ${2:props} }) {\n\tconst [${3:state}, set${4:State}] = useState(${5:null});\n\treturn <div>$0</div>;\n}" },
-  ],
-  python: [
-    { prefix: 'def', label: 'Function', body: 'def ${1:name}(${2:args}):\n\t"""${3:Docstring}"""\n\t$0' },
-    { prefix: 'class', label: 'Class', body: 'class ${1:Name}:\n\tdef __init__(self, ${2:args}):\n\t\t$0' },
-    { prefix: 'dataclass', label: 'Dataclass', body: 'from dataclasses import dataclass\n\n@dataclass\nclass ${1:Name}:\n\t${2:field}: ${3:str}' },
-    { prefix: 'main', label: 'Main guard', body: 'if __name__ == "__main__":\n\t${1:main()}' },
-    { prefix: 'lc', label: 'List comprehension', body: '[${1:x} for ${1:x} in ${2:items} if ${3:cond}]' },
-    { prefix: 'with', label: 'With open', body: "with open('${1:file.txt}', '${2:r}') as f:\n\t${3:data = f.read()}" },
-    { prefix: 'try', label: 'try / except', body: 'try:\n\t$1\nexcept ${2:Exception} as e:\n\tprint(e)' },
-    { prefix: 'timeit', label: 'Timer', body: 'import time\nstart = time.perf_counter()\n$0\nprint(f"Elapsed: {time.perf_counter() - start:.4f}s")' },
-  ],
-  html: [
-    { prefix: '!', label: 'HTML5 boilerplate', body: '<!DOCTYPE html>\n<html lang="en">\n<head>\n\t<meta charset="UTF-8" />\n\t<meta name="viewport" content="width=device-width, initial-scale=1.0" />\n\t<title>${1:Document}</title>\n</head>\n<body>\n\t$0\n</body>\n</html>' },
-    { prefix: 'link', label: 'Stylesheet link', body: '<link rel="stylesheet" href="${1:style.css}" />' },
-    { prefix: 'script', label: 'Script tag', body: '<script src="${1:app.js}"></script>' },
-    { prefix: 'form', label: 'Form', body: '<form>\n\t<label for="${1:name}">${2:Name}</label>\n\t<input id="$1" name="$1" type="${3:text}" />\n\t<button type="submit">Submit</button>\n</form>' },
-    { prefix: 'table', label: 'Table', body: '<table>\n\t<thead><tr><th>${1:Header}</th></tr></thead>\n\t<tbody><tr><td>${2:Cell}</td></tr></tbody>\n</table>' },
-    { prefix: 'tw', label: 'Tailwind CDN', body: '<script src="https://cdn.tailwindcss.com"></script>' },
-  ],
-  css: [
-    { prefix: 'center', label: 'Flex center', body: 'display: flex;\nalign-items: center;\njustify-content: center;' },
-    { prefix: 'grid', label: 'Responsive grid', body: 'display: grid;\ngrid-template-columns: repeat(auto-fill, minmax(${1:200px}, 1fr));\ngap: ${2:1rem};' },
-    { prefix: 'media', label: 'Media query', body: '@media (max-width: ${1:768px}) {\n\t$0\n}' },
-    { prefix: 'keyframes', label: 'Keyframes', body: '@keyframes ${1:fade} {\n\tfrom { opacity: 0; }\n\tto { opacity: 1; }\n}' },
-    { prefix: 'glass', label: 'Glassmorphism', body: 'background: rgba(255, 255, 255, 0.08);\nbackdrop-filter: blur(12px);\nborder: 1px solid rgba(255, 255, 255, 0.15);\nborder-radius: 16px;' },
-  ],
-  sql: [
-    { prefix: 'sel', label: 'SELECT', body: 'SELECT ${1:*}\nFROM ${2:table}\nWHERE ${3:condition};' },
-    { prefix: 'join', label: 'INNER JOIN', body: 'SELECT a.*, b.*\nFROM ${1:a}\nJOIN ${2:b} ON b.${3:a_id} = a.id;' },
-    { prefix: 'ct', label: 'CREATE TABLE', body: 'CREATE TABLE ${1:name} (\n\tid INTEGER PRIMARY KEY,\n\t${2:col} TEXT NOT NULL\n);' },
-    { prefix: 'ins', label: 'INSERT', body: 'INSERT INTO ${1:table} (${2:cols}) VALUES (${3:vals});' },
-    { prefix: 'cte', label: 'WITH (CTE)', body: 'WITH ${1:cte} AS (\n\t${2:SELECT 1}\n)\nSELECT * FROM $1;' },
-  ],
-  go: [
-    { prefix: 'func', label: 'Function', body: 'func ${1:name}(${2:args}) ${3:error} {\n\t$0\n}' },
-    { prefix: 'iferr', label: 'if err != nil', body: 'if err != nil {\n\treturn ${1:err}\n}' },
-  ],
-  rust: [
-    { prefix: 'fn', label: 'Function', body: 'fn ${1:name}(${2:args}) -> ${3:()} {\n\t$0\n}' },
-    { prefix: 'struct', label: 'Struct', body: '#[derive(Debug, Clone)]\nstruct ${1:Name} {\n\t${2:field}: ${3:String},\n}' },
-  ],
-  java: [
-    { prefix: 'psvm', label: 'main method', body: 'public static void main(String[] args) {\n\t$0\n}' },
-    { prefix: 'sout', label: 'System.out.println', body: 'System.out.println(${1});' },
-  ],
-};
-SNIPPETS.typescript = [
-  ...SNIPPETS.javascript,
-  { prefix: 'interface', label: 'Interface', body: 'interface ${1:Name} {\n\t${2:key}: ${3:string};\n}' },
-  { prefix: 'type', label: 'Type alias', body: 'type ${1:Name} = ${2:string};' },
-  { prefix: 'enum', label: 'Enum', body: 'enum ${1:Name} {\n\t${2:A},\n\t${3:B},\n}' },
-  { prefix: 'generic', label: 'Generic function', body: 'function ${1:name}<T>(${2:arg}: T): T {\n\treturn $2;\n}' },
-];
+export { SNIPPETS, loadCustomSnippets } from '../ide/snippets';
+import { SNIPPETS, loadCustomSnippets, saveCustomSnippets } from '../ide/snippets';
 
 export function insertSnippet(ide: ReturnType<typeof useIDE>, body: string) {
   const ed = ide.getEditor();
@@ -81,10 +17,6 @@ export function insertSnippet(ide: ReturnType<typeof useIDE>, body: string) {
   else ed.executeEdits('snip', [{ range: ed.getSelection(), text: body.replace(/\$\{\d+:?([^}]*)\}|\$\d/g, '$1') }]);
 }
 
-const CUSTOM_KEY = 'jotqoda-snippets';
-export const loadCustomSnippets = (): { prefix: string; label: string; body: string; lang: string }[] => {
-  try { return JSON.parse(localStorage.getItem(CUSTOM_KEY) || '[]'); } catch { return []; }
-};
 
 export function SnippetsView() {
   const ide = useIDE();
@@ -103,13 +35,13 @@ export function SnippetsView() {
     if (!name) return;
     const next = [...custom, { prefix: name.toLowerCase().replace(/\W+/g, ''), label: name, body: sel.replace(/\$/g, '\\$'), lang: langId }];
     setCustom(next);
-    localStorage.setItem(CUSTOM_KEY, JSON.stringify(next));
+    saveCustomSnippets(next);
     ide.toast('Snippet saved', 'success');
   };
   const del = (label: string) => {
     const next = custom.filter((c) => !(c.label === label && c.lang === cur));
     setCustom(next);
-    localStorage.setItem(CUSTOM_KEY, JSON.stringify(next));
+    saveCustomSnippets(next);
   };
 
   return (
@@ -144,8 +76,10 @@ export function SnippetsView() {
 export function RunView() {
   const ide = useIDE();
   const file = ide.activeFile && ide.files[ide.activeFile] != null ? ide.activeFile : null;
-  const lang = file ? getLang(file) : null;
-  const runnable = Object.keys(ide.files).filter((p) => getLang(p).runnable && getLang(p).runnable !== 'css');
+  const langOf = (p: string) => (ide.langOverride[p] ? getLangById(ide.langOverride[p]) : getLang(p));
+  const lang = file ? langOf(file) : null;
+  const runnable = Object.keys(ide.files).filter((p) => { const k = langOf(p).runnable; return k && k !== 'css'; });
+  const runtimes = [...new Set(RUNNABLE_LANGS.map((l) => l.name.replace(/ \/.*$/, '')))];
   return (
     <div className="flex flex-col h-full text-[13px]">
       <div className="p-3 space-y-2">
@@ -156,7 +90,7 @@ export function RunView() {
         {lang && (
           <div className="text-[11px] text-[var(--muted)] p-2 rounded-sm bg-[var(--input)]">
             <div className="font-semibold text-[var(--fg)] mb-0.5 flex items-center gap-1.5"><FileIcon path={file!} /> {lang.name}</div>
-            {lang.runnable ? RUNNABLE_INFO[lang.runnable] : `No in-browser runtime for ${lang.name}. Full editing, highlighting, snippets & formatting are available. Executable runtimes: JS, TS, Python, SQL, HTML, Markdown, SVG, JSON.`}
+            {lang.runnable ? RUNNABLE_INFO[lang.runnable] : `No in-browser runtime for ${lang.name}. Highlighting, outline, IntelliSense-lite, snippets & formatting still work. Runtimes: ${runtimes.join(', ')}.`}
           </div>
         )}
         <div className="grid grid-cols-2 gap-1 text-[11px]">
@@ -178,6 +112,7 @@ export function RunView() {
       <div className="p-3 text-[11px] text-[var(--muted)] border-t border-[var(--border)] space-y-0.5">
         <div><b>F5</b> / <b>Ctrl+Enter</b> run · <b>Shift+F5</b> stop</div>
         <div><b>Ctrl+Shift+V</b> toggle preview</div>
+        <div className="opacity-80">All runtimes execute locally in your browser (WebAssembly / Web Workers). Runtimes are downloaded from jsDelivr on first use.</div>
       </div>
     </div>
   );
@@ -193,52 +128,136 @@ function Toggle({ k, label }: { k: keyof Settings; label: string }) {
   );
 }
 
-const EXTENSIONS: { k: keyof Settings; name: string; author: string; desc: string; icon: any; color: string; installs: string }[] = [
-  { k: 'bracketPairs', name: 'Bracket Pair Colorizer', author: 'jotqoda', desc: 'Colorizes matching brackets for readability', icon: Braces, color: '#f59e0b', installs: '12.4M' },
-  { k: 'minimap', name: 'Minimap', author: 'jotqoda', desc: 'Bird’s-eye code overview on the right', icon: Rows3, color: '#3b82f6', installs: '9.1M' },
-  { k: 'stickyScroll', name: 'Sticky Scroll', author: 'jotqoda', desc: 'Keeps current scope headers pinned while scrolling', icon: Pin, color: '#ef4444', installs: '5.6M' },
-  { k: 'indentGuides', name: 'Indent Rainbow Guides', author: 'jotqoda', desc: 'Vertical indentation guides', icon: Grid2x2, color: '#10b981', installs: '8.8M' },
-  { k: 'formatOnSave', name: 'Prettier — Format on Save', author: 'jotqoda', desc: 'Auto-formats documents on Ctrl+S', icon: Sparkles, color: '#c596c7', installs: '41.2M' },
-  { k: 'autoSave', name: 'Auto Save', author: 'jotqoda', desc: 'Persists every keystroke automatically', icon: Save, color: '#6366f1', installs: '7.2M' },
-  { k: 'ligatures', name: 'Font Ligatures', author: 'jotqoda', desc: 'Beautiful programming ligatures (=>, !==, >=)', icon: Link2, color: '#ec4899', installs: '3.3M' },
-  { k: 'smoothCaret', name: 'Smooth Caret', author: 'jotqoda', desc: 'Animated cursor movement', icon: MousePointerClick, color: '#14b8a6', installs: '2.1M' },
-  { k: 'linkedEditing', name: 'Auto Rename Tag', author: 'jotqoda', desc: 'Renames paired HTML/XML tags together', icon: Tags, color: '#e34c26', installs: '18.9M' },
-  { k: 'colorDecorators', name: 'Color Highlight', author: 'jotqoda', desc: 'Inline color swatches & picker for CSS colors', icon: Palette, color: '#8b5cf6', installs: '6.4M' },
-  { k: 'wordWrap', name: 'Word Wrap', author: 'jotqoda', desc: 'Wraps long lines to the viewport', icon: WrapText, color: '#0ea5e9', installs: '4.0M' },
-  { k: 'typeCheck', name: 'TypeScript Diagnostics', author: 'jotqoda', desc: 'Semantic type checking for JS/TS', icon: Type, color: '#3178c6', installs: '30.5M' },
-  { k: 'mouseWheelZoom', name: 'Mouse Wheel Zoom', author: 'jotqoda', desc: 'Ctrl + scroll to zoom the editor', icon: ZoomIn, color: '#84cc16', installs: '1.2M' },
-  { k: 'parameterHints', name: 'Parameter Hints', author: 'jotqoda', desc: 'Signature help while typing function calls', icon: Sigma, color: '#f97316', installs: '11.0M' },
-  { k: 'folding', name: 'Code Folding', author: 'jotqoda', desc: 'Collapse regions & blocks', icon: ChevronsDownUp, color: '#64748b', installs: '15.7M' },
+const FEATURES: { k: keyof Settings; name: string; desc: string; icon: any; color: string }[] = [
+  { k: 'emmet', name: 'Emmet', desc: 'Abbreviation expansion in HTML, templates & CSS (e.g. ul>li*3)', icon: Scissors, color: '#9ec400' },
+  { k: 'prettier', name: 'Prettier Formatter', desc: 'Formats JS, TS, JSON, CSS/SCSS/Less, HTML, Vue, Markdown, YAML & GraphQL', icon: Wand2, color: '#c596c7' },
+  { k: 'formatOnSave', name: 'Format on Save', desc: 'Runs the formatter pipeline on Ctrl+S', icon: Sparkles, color: '#f472b6' },
+  { k: 'localHistory', name: 'Local History', desc: 'Snapshots on save & before destructive edits (Timeline)', icon: History, color: '#22d3ee' },
+  { k: 'bracketPairs', name: 'Bracket Pair Colorization', desc: 'Colorizes matching brackets for readability', icon: Braces, color: '#f59e0b' },
+  { k: 'minimap', name: 'Minimap', desc: 'Bird’s-eye code overview', icon: Rows3, color: '#3b82f6' },
+  { k: 'stickyScroll', name: 'Sticky Scroll', desc: 'Keeps the current scope headers pinned while scrolling', icon: Pin, color: '#ef4444' },
+  { k: 'indentGuides', name: 'Indent Guides', desc: 'Vertical indentation guides', icon: Grid2x2, color: '#10b981' },
+  { k: 'autoSave', name: 'Auto Save', desc: 'Persists every keystroke automatically', icon: Save, color: '#6366f1' },
+  { k: 'ligatures', name: 'Font Ligatures', desc: 'Programming ligatures (=>, !==, >=)', icon: Link2, color: '#ec4899' },
+  { k: 'smoothCaret', name: 'Smooth Caret', desc: 'Animated cursor movement', icon: MousePointerClick, color: '#14b8a6' },
+  { k: 'linkedEditing', name: 'Linked Tag Editing', desc: 'Renames paired HTML/XML tags together', icon: Tags, color: '#e34c26' },
+  { k: 'colorDecorators', name: 'Color Decorators', desc: 'Inline color swatches & picker for CSS colors', icon: Palette, color: '#8b5cf6' },
+  { k: 'occurrencesHighlight', name: 'Highlight Occurrences', desc: 'Highlights other occurrences of the symbol under the cursor', icon: Highlighter, color: '#eab308' },
+  { k: 'wordWrap', name: 'Word Wrap', desc: 'Wraps long lines to the viewport', icon: WrapText, color: '#0ea5e9' },
+  { k: 'typeCheck', name: 'TypeScript Diagnostics', desc: 'Semantic type checking for TS', icon: Type, color: '#3178c6' },
+  { k: 'mouseWheelZoom', name: 'Mouse Wheel Zoom', desc: 'Ctrl + scroll to zoom the editor', icon: ZoomIn, color: '#84cc16' },
+  { k: 'parameterHints', name: 'Parameter Hints', desc: 'Signature help while typing function calls', icon: Sigma, color: '#f97316' },
+  { k: 'folding', name: 'Code Folding', desc: 'Collapse regions & blocks', icon: ChevronsDownUp, color: '#64748b' },
 ];
 
+/** "Extensions" view — an honest catalogue of built-in languages, runtimes and features. */
 export function ExtensionsView() {
   const ide = useIDE();
   const [q, setQ] = useState('');
-  const list = EXTENSIONS.filter((e) => (e.name + e.desc).toLowerCase().includes(q.toLowerCase()));
+  const [tab, setTab] = useState<'languages' | 'features'>('languages');
+  const [cat, setCat] = useState<string>('All');
+  const ql = q.toLowerCase();
+  const langs = useMemo(() => LANGUAGES.filter((l) => (cat === 'All' || l.category === cat) && (!ql || (l.name + ' ' + l.exts.join(' ') + ' ' + l.aliases.join(' ')).toLowerCase().includes(ql))), [cat, ql]);
+  const counts = useMemo(() => { const c: Record<string, number> = {}; LANGUAGES.forEach((l) => { c[l.category] = (c[l.category] ?? 0) + 1; }); return c; }, []);
+  const features = FEATURES.filter((e) => (e.name + e.desc).toLowerCase().includes(ql));
+  const badge = (l: LangDef) => {
+    const out: [string, string][] = [];
+    if (isExecutable(l)) out.push(['Run', 'text-emerald-400 border-emerald-400/40']);
+    else if (l.runnable && l.runnable !== 'css') out.push(['Preview', 'text-sky-400 border-sky-400/40']);
+    const f = formatterName(l, ide.settings);
+    if (f && f !== 'Reindent') out.push([`format: ${f}`, 'text-fuchsia-300 border-fuchsia-300/40']);
+    out.push([l.builtin ? 'Monaco grammar' : 'JotQoda grammar', 'text-[var(--muted)] border-[var(--border)]']);
+    return out;
+  };
   return (
     <div className="flex flex-col h-full text-[13px]">
-      <div className="p-2"><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search Extensions" className="w-full h-7 px-2 bg-[var(--input)] border border-[var(--border)] rounded-sm outline-none focus:border-[var(--accent)]" /></div>
-      <div className="px-2 h-6 flex items-center text-[11px] font-bold uppercase tracking-wide">Built-in · {EXTENSIONS.filter((e) => ide.settings[e.k]).length} enabled</div>
-      <div className="flex-1 overflow-auto">
-        {list.map((e) => {
-          const on = !!ide.settings[e.k];
-          const Icon = e.icon;
-          return (
-            <div key={e.k} className="flex gap-2.5 px-3 py-2 hover:bg-[var(--hover)]">
-              <div className="w-10 h-10 rounded-md shrink-0 flex items-center justify-center" style={{ background: e.color + '30', color: e.color }}><Icon size={19} /></div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1"><span className="font-semibold truncate">{e.name}</span>{on && <Check size={12} className="text-emerald-400" />}</div>
-                <div className="text-[11px] text-[var(--muted)] truncate">{e.desc}</div>
-                <div className="flex items-center gap-2 mt-1 text-[10px] text-[var(--muted)]">
-                  <span className="inline-flex items-center gap-1"><Download size={11} /> {e.installs}</span>
-                  <span className="inline-flex items-center gap-0.5 text-amber-400" title="5 stars">{[0, 1, 2, 3, 4].map((i) => <Star key={i} size={10} fill="currentColor" />)}</span>
-                  <button onClick={() => { ide.setSetting(e.k, !on as any); ide.toast(`${e.name} ${on ? 'disabled' : 'enabled'}`); }} className={`ml-auto px-2 py-0.5 rounded-sm text-[11px] ${on ? 'border border-[var(--border)] hover:bg-[var(--input)]' : 'bg-[var(--accent)] text-white'}`}>{on ? 'Disable' : 'Enable'}</button>
+      <div className="p-2 space-y-1.5">
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={tab === 'languages' ? `Search ${LANGUAGES.length} languages (name, extension…)` : 'Search features'} className="w-full h-7 px-2 bg-[var(--input)] border border-[var(--border)] rounded-sm outline-none focus:border-[var(--accent)]" />
+        <div className="flex gap-1 text-[11px]">
+          {(['languages', 'features'] as const).map((t) => <button key={t} onClick={() => setTab(t)} className={`px-2 py-0.5 rounded-sm capitalize ${tab === t ? 'bg-[var(--accent)] text-white' : 'border border-[var(--border)] text-[var(--muted)]'}`}>{t}</button>)}
+          {tab === 'languages' && (
+            <select value={cat} onChange={(e) => setCat(e.target.value)} className="ml-auto h-6 px-1 bg-[var(--input)] border border-[var(--border)] rounded-sm text-[11px]">
+              <option value="All">All categories ({LANGUAGES.length})</option>
+              {CATEGORY_ORDER.filter((c) => counts[c]).map((c) => <option key={c} value={c}>{c} ({counts[c]})</option>)}
+            </select>
+          )}
+        </div>
+      </div>
+      {tab === 'languages' ? (
+        <>
+          <div className="px-2 h-6 flex items-center text-[11px] font-bold uppercase tracking-wide">{langs.length} languages · {RUNNABLE_LANGS.length} runnable</div>
+          <div className="flex-1 overflow-auto">
+            {langs.map((l) => (
+              <div key={l.id} className="flex gap-2 px-3 py-1.5 hover:bg-[var(--hover)] cursor-default" title={l.exts.length ? l.exts.map((e) => '.' + e).join(' ') : l.files.join(' ')}>
+                <span className="w-2.5 h-2.5 rounded-full mt-1 shrink-0" style={{ background: l.color }} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5"><span className="font-semibold truncate">{l.name}</span><span className="text-[10px] text-[var(--muted)] truncate">{l.category}</span></div>
+                  <div className="text-[11px] text-[var(--muted)] truncate">{[...l.exts.slice(0, 6).map((e) => '.' + e), ...l.files.slice(0, 3)].join(' ') || '—'}</div>
+                  <div className="flex flex-wrap gap-1 mt-0.5">
+                    {badge(l).map(([t, c], i) => <span key={i + t} className={`text-[9px] px-1 rounded-sm border ${c}`}>{t}</span>)}
+                    {ide.activeFile && ide.files[ide.activeFile] != null && <button onClick={() => ide.setLangOverride(ide.activeFile!, l.id)} className="text-[9px] px-1 rounded-sm border border-[var(--border)] text-[var(--muted)] hover:text-[var(--fg)] ml-auto">Use for current file</button>}
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
+            ))}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="px-2 h-6 flex items-center text-[11px] font-bold uppercase tracking-wide">Built-in · {FEATURES.filter((e) => ide.settings[e.k]).length} enabled</div>
+          <div className="flex-1 overflow-auto">
+            {features.map((e) => {
+              const on = !!ide.settings[e.k];
+              const Icon = e.icon;
+              return (
+                <div key={e.k} className="flex gap-2.5 px-3 py-2 hover:bg-[var(--hover)]">
+                  <div className="w-9 h-9 rounded-md shrink-0 flex items-center justify-center" style={{ background: e.color + '30', color: e.color }}><Icon size={17} /></div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1"><span className="font-semibold truncate">{e.name}</span>{on && <Check size={12} className="text-emerald-400" />}</div>
+                    <div className="text-[11px] text-[var(--muted)]">{e.desc}</div>
+                  </div>
+                  <button onClick={() => { ide.setSetting(e.k, !on as any); ide.toast(`${e.name} ${on ? 'disabled' : 'enabled'}`); }} className={`self-center px-2 py-0.5 rounded-sm text-[11px] ${on ? 'border border-[var(--border)] hover:bg-[var(--input)]' : 'bg-[var(--accent)] text-white'}`}>{on ? 'Disable' : 'Enable'}</button>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+export function BookmarksView() {
+  const ide = useIDE();
+  const byFile = useMemo(() => {
+    const m = new Map<string, typeof ide.bookmarks>();
+    [...ide.bookmarks].sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line).forEach((b) => m.set(b.path, [...(m.get(b.path) ?? []), b]));
+    return [...m];
+  }, [ide.bookmarks]);
+  return (
+    <div className="flex flex-col h-full text-[13px]">
+      <div className="p-2 flex gap-1">
+        <button onClick={() => ide.toggleBookmark()} className="flex-1 h-7 flex items-center justify-center gap-1.5 rounded-sm bg-[var(--accent)] text-white text-[12px]"><Bookmark size={13} /> Toggle at Cursor</button>
+        <button onClick={() => ide.clearBookmarks()} disabled={!ide.bookmarks.length} className="h-7 px-2 rounded-sm border border-[var(--border)] text-[12px] disabled:opacity-40">Clear</button>
+      </div>
+      <div className="px-3 pb-2 text-[11px] text-[var(--muted)]">Ctrl+Alt+K toggle · Ctrl+Alt+L next · Ctrl+Alt+J previous · click the gutter to toggle</div>
+      <div className="flex-1 overflow-auto">
+        {!byFile.length && <div className="px-4 py-2 text-[12px] text-[var(--muted)]">No bookmarks yet.</div>}
+        {byFile.map(([path, list]) => (
+          <div key={path}>
+            <div className="flex items-center gap-1.5 px-2 h-[22px] text-[12px] font-semibold"><FileIcon path={path} /> <span className="truncate">{basename(path)}</span><span className="text-[10px] text-[var(--muted)] truncate">{dirname(path)}</span><span className="ml-auto text-[10px] text-[var(--muted)]">{list.length}</span></div>
+            {list.map((b) => (
+              <div key={b.line} onClick={() => ide.revealAt(b.path, b.line)} className="group flex items-center gap-2 pl-7 pr-2 h-[22px] cursor-pointer hover:bg-[var(--hover)] text-[12px]">
+                <Bookmark size={11} className="text-blue-400 shrink-0" fill="currentColor" />
+                <span className="text-[var(--muted)] w-8 shrink-0">{b.line}</span>
+                <span className="truncate font-mono text-[11px]">{(ide.files[b.path]?.split('\n')[b.line - 1] ?? b.label ?? '').trim() || '(empty line)'}</span>
+                <button onClick={(e) => { e.stopPropagation(); ide.toggleBookmark(b.path, b.line); }} className="ml-auto opacity-0 group-hover:opacity-100 text-[var(--muted)] hover:text-red-400"><Trash2 size={11} /></button>
+              </div>
+            ))}
+          </div>
+        ))}
       </div>
     </div>
   );
 }
+

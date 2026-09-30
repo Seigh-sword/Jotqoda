@@ -1,3 +1,5 @@
+import { MORE_FILE_TEMPLATES, POLYGLOT_FILES } from './lang/fileTemplates';
+
 export type Workspace = { files: Record<string, string>; folders: string[] };
 
 const README = `# 🚀 Welcome to JotQoda
@@ -5,12 +7,12 @@ const README = `# 🚀 Welcome to JotQoda
 A **blazing fast**, browser-based IDE powered by the Monaco engine (the heart of VS Code).
 
 ## Highlights
-- 75+ languages with syntax highlighting
-- Real execution for **JavaScript**, **TypeScript**, **Python**, **SQL**
-- Live **HTML / Markdown / SVG** preview
-- Integrated terminal, source control, global search & replace
-- Command palette with 100+ commands (\`Ctrl+Shift+P\`)
-- Split editors, Zen mode, 12 themes & tons of developer tools
+- 400+ languages with syntax highlighting, outline, symbol search & keyword IntelliSense
+- Real in-browser execution for **JavaScript**, **TypeScript**, **Python**, **SQL**, **Lua**, **Ruby**, **PHP**, **Scheme**, **Prolog**, **CoffeeScript**, **Clojure**, **WebAssembly text** & **Brainfuck**
+- Live **HTML / Markdown / SVG / Mermaid / Graphviz / CSV** preview
+- Integrated multi-terminal (pipes & redirection), source control, local history, global search & replace
+- Command palette with 280+ commands (\`Ctrl+Shift+P\`), editable keybindings
+- Up to 4 editor groups, pinned tabs, Emmet, Prettier formatting, Zen mode, 30+ themes & developer tools
 
 ## Try it
 1. Open \`src/main.ts\` and press **F5** (or \`Ctrl+Enter\`)
@@ -302,6 +304,7 @@ export const WORKSPACE_TEMPLATES: Record<string, { name: string; desc: string; w
       },
     },
   },
+  polyglot: { name: 'Polyglot Runtimes', desc: 'Lua, Ruby, PHP, Scheme, Prolog, CoffeeScript, Clojure, WAT, Brainfuck + diagrams', ws: { folders: ['lua', 'ruby', 'php', 'scheme', 'prolog', 'coffee', 'clojure', 'wasm', 'bf', 'diagrams', 'data'], files: POLYGLOT_FILES } },
   empty: { name: 'Empty Workspace', desc: 'Start from scratch', ws: { folders: [], files: { 'untitled.txt': '' } } },
 };
 
@@ -337,3 +340,5 @@ export const FILE_TEMPLATES: Record<string, string> = {
   graphql: `type Query {\n  hello: String!\n}\n`,
   solidity: `// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ncontract Hello {\n    string public greeting = "Hello, Solidity!";\n}\n`,
 };
+
+for (const [k, v] of Object.entries(MORE_FILE_TEMPLATES)) if (!(k in FILE_TEMPLATES)) FILE_TEMPLATES[k] = v;

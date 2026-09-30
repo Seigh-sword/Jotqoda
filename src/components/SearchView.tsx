@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CaseSensitive, Regex, WholeWord, ChevronRight, ChevronDown, Replace, ReplaceAll } from 'lucide-react';
 import { useIDE, basename, dirname } from '../ide/types';
 import { FileIcon } from './FileIcon';
@@ -15,6 +15,14 @@ export function SearchView() {
   const [include, setInclude] = useState('');
   const [exclude, setExclude] = useState('');
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const qRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const r = ide.searchRequest;
+    if (!r) return;
+    if (r.query != null) setQ(r.query);
+    if (r.include != null) setInclude(r.include);
+    setTimeout(() => { qRef.current?.focus(); qRef.current?.select(); }, 30);
+  }, [ide.searchRequest?.id]);
 
   const { re, err } = useMemo(() => {
     if (!q) return { re: null, err: '' };
@@ -50,19 +58,11 @@ export function SearchView() {
 
   const total = results.reduce((a, r) => a + r.matches.length, 0);
 
-  const goto = (path: string, line: number, col: number, len: number) => {
-    ide.openFile(path);
-    setTimeout(() => {
-      const ed = ide.getEditor();
-      if (!ed) return;
-      ed.setSelection({ startLineNumber: line, startColumn: col, endLineNumber: line, endColumn: col + len });
-      ed.revealLineInCenter(line);
-      ed.focus();
-    }, 60);
-  };
+  const goto = (path: string, line: number, col: number, len: number) => ide.revealAt(path, line, col, line, col + len);
 
   const replaceIn = (path: string) => {
     if (!re) return;
+    ide.snapshot(path, 'Before replace');
     ide.writeFile(path, ide.files[path].replace(re, rep), true);
   };
   const replaceAll = () => {
@@ -79,7 +79,7 @@ export function SearchView() {
           <button onClick={() => setShowRep(!showRep)} className="text-[var(--muted)] hover:text-[var(--fg)]">{showRep ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button>
           <div className="flex-1 space-y-1.5">
             <div className="relative">
-              <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" className={input + ' pr-20'} />
+              <input ref={qRef} autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" className={input + ' pr-20'} />
               <div className="absolute right-1 top-0.5 flex">
                 <IconBtn title="Match Case" active={cs} onClick={() => setCs(!cs)}><CaseSensitive size={14} /></IconBtn>
                 <IconBtn title="Match Whole Word" active={ww} onClick={() => setWw(!ww)}><WholeWord size={14} /></IconBtn>
@@ -94,7 +94,7 @@ export function SearchView() {
             )}
           </div>
         </div>
-        <input value={include} onChange={(e) => setInclude(e.target.value)} placeholder="files to include (e.g. *.ts, src/*)" className={input} />
+        <input value={include} onChange={(e) => setInclude(e.target.value)} placeholder="files to include (e.g. *.ts, src/**)" className={input} />
         <input value={exclude} onChange={(e) => setExclude(e.target.value)} placeholder="files to exclude" className={input} />
         {err && <div className="text-red-400 text-xs">{err}</div>}
         {q && !err && <div className="text-xs text-[var(--muted)]">{total} result{total !== 1 && 's'} in {results.length} file{results.length !== 1 && 's'}</div>}

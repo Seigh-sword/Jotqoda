@@ -1,28 +1,48 @@
-import { FilePlus, FolderOpen, Command, LayoutTemplate, Upload, Terminal, Play, Palette, Settings, Keyboard, GitBranch, Search, Wrench, Eye, Zap, Sparkles } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { FilePlus, FolderOpen, Command, LayoutTemplate, Upload, Terminal, Play, Palette, Settings, Keyboard, GitBranch, Search, Wrench, Eye, Zap, Sparkles, ListTree, History, Columns2, Wand2, FileArchive, Bookmark } from 'lucide-react';
 import { useIDE } from '../ide/types';
-import { LANGUAGES } from '../ide/languages';
+import { LANGUAGES, CATEGORY_ORDER, RUNNABLE_LANGS, isExecutable } from '../ide/languages';
 import { WORKSPACE_TEMPLATES } from '../ide/templates';
 import { THEMES } from '../ide/themes';
 
+function luminance(hex: string) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return 0.5;
+  const n = parseInt(m[1], 16);
+  return (0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255;
+}
+
 export function Welcome() {
   const ide = useIDE();
+  const [cat, setCat] = useState<string>('All');
+  const [q, setQ] = useState('');
+  const runnable = RUNNABLE_LANGS;
+  const counts = useMemo(() => { const c: Record<string, number> = {}; LANGUAGES.forEach((l) => { c[l.category] = (c[l.category] ?? 0) + 1; }); return c; }, []);
+  const shown = LANGUAGES.filter((l) => (cat === 'All' || l.category === cat) && (!q || (l.name + ' ' + l.exts.join(' ')).toLowerCase().includes(q.toLowerCase())));
   const start: [any, string, string][] = [
     [FilePlus, 'New File…', 'file.new'],
-    [FolderOpen, 'New Folder…', 'file.newFolder'],
+    [FolderOpen, 'Open Local Folder…', 'workspace.openFolder'],
+    [FileArchive, 'Import ZIP Archive…', 'workspace.importZip'],
     [Upload, 'Import Workspace (JSON)…', 'workspace.import'],
     [LayoutTemplate, 'Load Template…', 'workspace.template'],
     [Command, 'Command Palette', 'view.palette'],
     [Keyboard, 'Keyboard Shortcuts', 'help.shortcuts'],
   ];
-  const features: [any, string, string][] = [
-    [Play, 'Run Code', 'JS · TS · Python · SQL in-browser'],
-    [Eye, 'Live Preview', 'HTML, Markdown & SVG'],
-    [Terminal, 'Terminal', '30+ shell commands'],
-    [GitBranch, 'Source Control', 'Commit, diff & discard'],
-    [Search, 'Global Search', 'Regex find & replace'],
-    [Wrench, 'Dev Tools', '11 built-in utilities'],
-    [Palette, '13 Themes', 'Dracula, Nord, Tokyo…'],
-    [Settings, '35+ Settings', 'Fully customizable'],
+  const features: [any, string, string, string?][] = [
+    [Play, 'Run Code', `${runnable.length} languages run in-browser: JS, TS, Python, SQL, Lua, Ruby, PHP, Scheme, Prolog…`, 'view.run'],
+    [Sparkles, `${LANGUAGES.length} Languages`, 'Highlighting, outline, symbols & keyword IntelliSense', 'view.languages'],
+    [ListTree, 'Outline & Symbols', 'Outline view, @ / # symbol search, go to definition', 'view.gotoSymbol'],
+    [Wand2, 'Formatting & Emmet', 'Prettier, SQL & XML formatters, Emmet abbreviations', 'editor.format'],
+    [Columns2, 'Editor Groups', 'Up to 4 splits, pinned & draggable tabs', 'view.split'],
+    [History, 'Local History', 'Timeline snapshots, compare & restore', 'history.show'],
+    [Eye, 'Live Preview', 'HTML, Markdown, SVG, Mermaid, Graphviz & CSV', 'view.preview'],
+    [Terminal, 'Terminal', 'Multiple shells, pipes, redirection, 80+ commands', 'view.terminal'],
+    [GitBranch, 'Source Control', 'Commit, diff & discard', 'view.git'],
+    [Search, 'Global Search', 'Regex find & replace, find in folder', 'view.search'],
+    [Bookmark, 'Bookmarks', 'Gutter bookmarks with next / previous', 'view.bookmarks'],
+    [Wrench, 'Dev Tools', '11 built-in utilities', 'view.tools'],
+    [Palette, `${THEMES.length} Themes`, 'Dracula, Gruvbox, Night Owl, Rosé Pine…', 'theme.select'],
+    [Settings, '75+ Settings', 'Editable keybindings too', 'settings.open'],
   ];
   return (
     <div className="h-full overflow-auto bg-[var(--bg)]">
@@ -51,18 +71,6 @@ export function Welcome() {
                 </button>
               ))}
             </div>
-          </div>
-          <div>
-            <h2 className="text-lg mb-3">Features</h2>
-            <div className="grid grid-cols-2 gap-2">
-              {features.map(([I, t, d]) => (
-                <div key={t} className="p-3 rounded-lg bg-[var(--side)] border border-[var(--border)] hover:border-[var(--accent)] transition-colors">
-                  <I size={18} className="text-[var(--accent)] mb-1.5" />
-                  <div className="text-[13px] font-semibold">{t}</div>
-                  <div className="text-[11px] text-[var(--muted)]">{d}</div>
-                </div>
-              ))}
-            </div>
             <h2 className="text-lg mt-8 mb-3">Theme</h2>
             <div className="flex flex-wrap gap-1.5">
               {THEMES.map((t) => (
@@ -73,15 +81,39 @@ export function Welcome() {
               ))}
             </div>
           </div>
+          <div>
+            <h2 className="text-lg mb-3">Features</h2>
+            <div className="grid grid-cols-2 gap-2">
+              {features.map(([I, t, d, cmd]) => (
+                <button key={t} onClick={() => cmd && ide.execCommand(cmd)} className="text-left p-3 rounded-lg bg-[var(--side)] border border-[var(--border)] hover:border-[var(--accent)] transition-colors">
+                  <I size={18} className="text-[var(--accent)] mb-1.5" />
+                  <div className="text-[13px] font-semibold">{t}</div>
+                  <div className="text-[11px] text-[var(--muted)]">{d}</div>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
-        <h2 className="text-lg mt-10 mb-3 flex items-center gap-2"><Sparkles size={16} className="text-[var(--accent)]" /> {LANGUAGES.length} Supported Languages</h2>
-        <div className="flex flex-wrap gap-1.5">
-          {LANGUAGES.map((l) => (
-            <span key={l.id} className="px-2 py-0.5 rounded-full text-[11px] border inline-flex items-center gap-1" style={{ borderColor: l.color + '66', color: l.color === '#000080' || l.color === '#141414' || l.color === '#555555' ? 'var(--muted)' : l.color, background: l.color + '14' }}>
-              {l.name}
-              {l.runnable && ['js', 'ts', 'python', 'sql'].includes(l.runnable) && <Play size={9} fill="currentColor" />}
-            </span>
+        <h2 className="text-lg mt-10 mb-3 flex items-center gap-2 flex-wrap">
+          <Sparkles size={16} className="text-[var(--accent)]" /> {LANGUAGES.length} Supported Languages
+          <span className="text-[12px] text-[var(--muted)] font-normal">· <Play size={10} className="inline" fill="currentColor" /> = runs in the browser</span>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter languages…" className="ml-auto h-7 px-2 text-[12px] rounded-sm bg-[var(--input)] border border-[var(--border)] outline-none focus:border-[var(--accent)] w-48" />
+        </h2>
+        <div className="flex flex-wrap gap-1 mb-3">
+          {['All', ...CATEGORY_ORDER.filter((c) => counts[c])].map((c) => (
+            <button key={c} onClick={() => setCat(c)} className={`px-2 py-0.5 rounded-sm text-[11px] border ${cat === c ? 'bg-[var(--accent)] text-white border-transparent' : 'border-[var(--border)] text-[var(--muted)] hover:text-[var(--fg)]'}`}>{c} {c === 'All' ? LANGUAGES.length : counts[c]}</button>
           ))}
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {shown.map((l) => {
+            const base = luminance(l.color) < 0.22 ? '#9ca3af' : l.color;
+            return (
+              <span key={l.id} title={`${l.category}${l.exts.length ? ' · ' + l.exts.slice(0, 6).map((e) => '.' + e).join(' ') : ''}`} className="px-2 py-0.5 rounded-full text-[11px] border inline-flex items-center gap-1" style={{ borderColor: base + '66', color: `color-mix(in srgb, ${base} 70%, var(--fg))`, background: base + '14' }}>
+                {l.name}
+                {isExecutable(l) && <Play size={9} fill="currentColor" />}
+              </span>
+            );
+          })}
         </div>
       </div>
     </div>

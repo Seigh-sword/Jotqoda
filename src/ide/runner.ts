@@ -1,3 +1,5 @@
+import { runExtra, stopRuntimes } from './runtimes';
+
 export type LogType = 'log' | 'info' | 'warn' | 'error' | 'success' | 'system' | 'table';
 export type LogFn = (type: LogType, text: string) => void;
 
@@ -52,7 +54,7 @@ onmessage = async (e) => {
   const cache = {};
   const resolve = (from, req) => {
     const base = norm((req.startsWith('/') ? '' : dirname(from) + '/') + req);
-    for (const c of [base, base + '.ts', base + '.tsx', base + '.js', base + '.jsx', base + '.mjs', base + '.cjs', base + '.json', base + '/index.ts', base + '/index.js'])
+    for (const c of [base, base + '.ts', base + '.tsx', base + '.js', base + '.jsx', base + '.mjs', base + '.cjs', base + '.json', base + '.coffee', base + '/index.ts', base + '/index.js'])
       if (c in modules) return c;
     return null;
   };
@@ -139,6 +141,7 @@ let current: Worker | null = null;
 let pyWorker: Worker | null = null;
 
 export function stopAll() {
+  stopRuntimes();
   if (current) { current.terminate(); current = null; }
   if (pyWorker && (pyWorker as any).__busy) { pyWorker.terminate(); pyWorker = null; }
 }
@@ -205,4 +208,10 @@ export async function compileTS(monaco: any, path: string, content: string): Pro
   const out = await worker.getEmitOutput(uri.toString());
   const js = out.outputFiles.find((f: any) => f.name.endsWith('.js'));
   return js ? js.text : content;
+}
+
+/** Run a file with one of the additional runtimes (Lua, Ruby, PHP, Scheme, Prolog, CoffeeScript, Brainfuck, Clojure, WAT). */
+export async function runLanguage(kind: string, path: string, files: Record<string, string>, log: LogFn, onDone: (ok: boolean, ms: number) => void, onClear: () => void) {
+  if (current) { current.terminate(); current = null; }
+  return runExtra(kind, path, files, log, onDone, (modules, entry) => runJavaScript(modules, entry, log, onDone, onClear));
 }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { X, Trash2, ChevronUp, ChevronDown, Copy, AlertCircle, AlertTriangle, Info, ListTodo, WrapText, Lock, Unlock, CheckCircle2, Terminal as TerminalIcon, Circle } from 'lucide-react';
+import { X, Trash2, ChevronUp, ChevronDown, Copy, AlertCircle, AlertTriangle, Info, ListTodo, WrapText, Lock, Unlock, CheckCircle2, Terminal as TerminalIcon, Circle, Plus } from 'lucide-react';
 import { useIDE, basename, dirname } from '../ide/types';
-import { Terminal } from './Terminal';
+import { Terminal, type TerminalHandle } from './Terminal';
 import { FileIcon } from './FileIcon';
 import { IconBtn } from './Explorer';
 
@@ -44,7 +44,7 @@ export function Panel({ maximized, setMaximized }: { maximized: boolean; setMaxi
         <IconBtn title="Close Panel" onClick={() => ide.setPanelOpen(false)}><X size={15} /></IconBtn>
       </div>
       <div className="flex-1 min-h-0 relative">
-        <div className={`absolute inset-0 ${ide.panelTab === 'terminal' ? '' : 'hidden'}`}><Terminal /></div>
+        <div className={`absolute inset-0 ${ide.panelTab === 'terminal' ? '' : 'hidden'}`}><TerminalHost visible={ide.panelTab === 'terminal' && ide.panelOpen} /></div>
         {ide.panelTab === 'output' && <Output filter={filter} wrap={wrap} lock={lock} />}
         {ide.panelTab === 'problems' && <Problems filter={filter} />}
         {ide.panelTab === 'todos' && <Todos todos={todos} />}
@@ -94,14 +94,59 @@ function Output({ filter, wrap, lock }: { filter: string; wrap: boolean; lock: b
 }
 
 function gotoLoc(ide: ReturnType<typeof useIDE>, path: string, line: number, col = 1) {
-  ide.openFile(path);
-  setTimeout(() => {
-    const ed = ide.getEditor();
-    if (!ed) return;
-    ed.setPosition({ lineNumber: line, column: col });
-    ed.revealLineInCenter(line);
-    ed.focus();
-  }, 80);
+  ide.revealAt(path, line, col);
+}
+
+let termSeq = 1;
+function TerminalHost({ visible }: { visible: boolean }) {
+  const ide = useIDE();
+  const [sessions, setSessions] = useState<{ id: number; name: string; cwd: string }[]>([{ id: 1, name: 'jotqoda-sh', cwd: '' }]);
+  const [active, setActive] = useState(1);
+  const refs = useRef<Record<number, TerminalHandle | null>>({});
+  const handled = useRef<number | null>(null);
+  const add = (cwd = '') => {
+    const id = ++termSeq;
+    setSessions((s) => [...s, { id, name: 'jotqoda-sh', cwd }]);
+    setActive(id);
+    return id;
+  };
+  const kill = (id: number) => {
+    setSessions((s) => {
+      const next = s.filter((x) => x.id !== id);
+      if (!next.length) { const nid = ++termSeq; setActive(nid); return [{ id: nid, name: 'jotqoda-sh', cwd: '' }]; }
+      if (active === id) setActive(next[next.length - 1].id);
+      return next;
+    });
+  };
+  useEffect(() => {
+    const r = ide.terminalRequest;
+    if (!r || handled.current === r.id) return;
+    handled.current = r.id;
+    let target = active;
+    if (r.newTerminal || r.cwd != null) target = add(r.cwd ?? '');
+    if (r.command) setTimeout(() => refs.current[target]?.exec(r.command!), 60);
+    else setTimeout(() => refs.current[target]?.focus(), 60);
+  }, [ide.terminalRequest]);
+  return (
+    <div className="h-full flex flex-col">
+      <div className="flex items-center gap-0.5 px-2 h-6 shrink-0 text-[11px] border-b border-[var(--border)]/60">
+        {sessions.map((t, i) => (
+          <div key={t.id} onClick={() => setActive(t.id)} className={`group flex items-center gap-1 pl-2 pr-1 h-5 rounded-sm cursor-pointer ${t.id === active ? 'bg-[var(--hover)] text-[var(--fg)]' : 'text-[var(--muted)] hover:text-[var(--fg)]'}`} title={t.cwd ? `/workspace/${t.cwd}` : '/workspace'}>
+            <TerminalIcon size={11} /> {i + 1}: {t.name}{t.cwd ? ` (${t.cwd.split('/').pop()})` : ''}
+            <button onClick={(e) => { e.stopPropagation(); kill(t.id); }} className="opacity-0 group-hover:opacity-100 hover:text-red-400" title="Kill Terminal"><X size={11} /></button>
+          </div>
+        ))}
+        <button onClick={() => add()} title="New Terminal (Ctrl+Shift+`)" className="p-0.5 rounded hover:bg-[var(--hover)] text-[var(--muted)]"><Plus size={13} /></button>
+      </div>
+      <div className="flex-1 min-h-0 relative">
+        {sessions.map((t, i) => (
+          <div key={t.id} className={`absolute inset-0 ${t.id === active ? '' : 'hidden'}`}>
+            <Terminal ref={(h) => { refs.current[t.id] = h; }} initialCwd={t.cwd} visible={visible && t.id === active} name={`${i + 1}: ${t.name}`} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function Problems({ filter }: { filter: string }) {

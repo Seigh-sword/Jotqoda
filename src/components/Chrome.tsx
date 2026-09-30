@@ -1,18 +1,18 @@
 import { useEffect, useState } from 'react';
-import { Files, Search, GitBranch, Play, Wrench, Puzzle, Settings, Keyboard, Zap, PanelLeft, PanelBottom, Columns2, Eye, Command as CmdIcon } from 'lucide-react';
+import { Files, Search, GitBranch, Play, Wrench, Puzzle, Settings, Keyboard, Zap, PanelLeft, PanelBottom, Columns2, Eye, Bookmark, Command as CmdIcon } from 'lucide-react';
 import { useIDE, basename, isSpecialTab, type SidebarView } from '../ide/types';
 import { useChanges } from './GitView';
-import { Kbd } from './FileIcon';
+import { Kbd, prettyKey } from './FileIcon';
 
 const MENUS: [string, (string | '-')[]][] = [
-  ['File', ['file.new', 'file.newFolder', 'file.newFromLang', '-', 'file.new.ts', 'file.new.py', 'file.new.html', '-', 'file.openInPreview', 'file.save', 'file.saveAll', 'file.revert', '-', 'file.rename', 'file.duplicate', 'file.delete', 'file.download', 'file.upload', 'file.copyPath', 'file.copyContent', 'file.reveal', '-', 'workspace.import', 'workspace.export', '-', 'workspace.template', 'workspace.stats', '-', 'file.close', 'file.closeOthers', 'file.closeAll', 'workspace.reset']],
-  ['Edit', ['editor.undo', 'editor.redo', '-', 'editor.find', 'editor.replace', 'view.search', '-', 'editor.comment', 'editor.blockComment', '-', 'editor.format', 'editor.formatSel', 'editor.trim', 'tx.trimTrailing', 'tx.trimBlankEnds', '-', 'insert.date', 'insert.uuid', 'insert.lorem', 'insert.template', 'insert.todo', 'insert.fixme', 'insert.separator', 'insert.banner']],
+  ['File', ['file.new', 'file.newFolder', 'file.newFromLang', '-', 'file.new.ts', 'file.new.py', 'file.new.html', '-', 'workspace.openFolder', 'workspace.importZip', 'workspace.downloadZip', '-', 'file.openInPreview', 'file.save', 'file.saveAll', 'file.revert', '-', 'file.rename', 'file.duplicate', 'file.delete', 'file.download', 'file.upload', 'file.copyPath', 'file.copyContent', 'file.reveal', '-', 'compare.saved', 'compare.file', 'compare.clipboard', 'history.show', '-', 'workspace.import', 'workspace.export', '-', 'workspace.template', 'workspace.stats', '-', 'file.close', 'file.closeOthers', 'view.closeSaved', 'file.closeAll', 'view.reopenClosed', 'workspace.reset']],
+  ['Edit', ['editor.undo', 'editor.redo', '-', 'editor.find', 'editor.replace', 'view.search', '-', 'editor.comment', 'editor.blockComment', '-', 'editor.format', 'editor.formatSel', 'editor.changeIndent', 'editor.changeEol', 'editor.trim', 'tx.trimTrailing', 'tx.trimBlankEnds', '-', 'editor.toggleBookmark', 'editor.nextBookmark', 'editor.prevBookmark', '-', 'insert.date', 'insert.uuid', 'insert.lorem', 'insert.template', 'insert.todo', 'insert.fixme', 'insert.separator', 'insert.banner']],
   ['Selection', ['editor.selectAll', 'editor.expand', 'editor.shrink', '-', 'editor.duplicate', 'editor.copyLineUp', 'editor.copyLineDown', 'editor.moveUp', 'editor.moveDown', 'editor.deleteLine', '-', 'editor.cursorAbove', 'editor.cursorBelow', 'editor.cursorsLineEnds', 'editor.toggleColumnSelection', 'editor.nextOcc', 'editor.selectOcc', '-', 'tx.upper', 'tx.lower', 'tx.sortAsc', 'tx.unique']],
-  ['View', ['view.palette', 'view.quickOpen', '-', 'view.explorer', 'view.search', 'view.git', 'view.run', 'view.extensions', 'view.tools', 'view.snippets', '-', 'view.terminal', 'view.output', 'view.problems', 'view.todos', '-', 'view.split', 'view.preview', 'view.zen', 'view.fullscreen', '-', 'view.zoomIn', 'view.zoomOut', 'view.zoomReset', '-', 'view.minimap', 'view.wordWrap', 'view.stickyScroll', 'view.breadcrumbs', 'view.renderLineHighlight', 'view.renderWhitespace', 'view.autoClosingBrackets', 'view.smoothScrolling', 'view.formatOnPaste']],
-  ['Go', ['view.quickOpen', 'view.gotoLine', 'view.gotoSymbol', '-', 'editor.gotoDef', 'editor.peekDef', 'editor.refs', 'editor.gotoBracket', '-', 'editor.nextProblem']],
-  ['Run', ['run.run', 'run.selection', 'run.stop', '-', 'view.preview', 'run.clear', 'view.run']],
-  ['Terminal', ['view.terminal', 'view.output', 'view.togglePanel']],
-  ['Help', ['view.welcome', 'help.shortcuts', 'view.palette', 'settings.open', 'theme.select', 'pref.reset', '-', 'help.about']],
+  ['View', ['view.palette', 'view.quickOpen', '-', 'view.explorer', 'view.search', 'view.git', 'view.run', 'view.extensions', 'view.tools', 'view.snippets', 'view.bookmarks', '-', 'view.terminal', 'view.output', 'view.problems', 'view.todos', '-', 'view.split', 'view.closeGroup', 'view.joinGroups', 'view.moveEditorNext', 'view.pinEditor', '-', 'view.preview', 'view.zen', 'view.fullscreen', 'layout.centered', 'layout.sidebarPosition', 'layout.activityBar', 'layout.statusBar', '-', 'view.zoomIn', 'view.zoomOut', 'view.zoomReset', '-', 'view.minimap', 'view.wordWrap', 'view.stickyScroll', 'view.breadcrumbs', 'view.renderLineHighlight', 'view.renderWhitespace', 'view.autoClosingBrackets', 'view.smoothScrolling', 'view.formatOnPaste']],
+  ['Go', ['go.back', 'go.forward', '-', 'view.quickOpen', 'view.gotoLine', 'view.gotoSymbol', 'go.workspaceSymbol', '-', 'editor.gotoDef', 'editor.peekDef', 'editor.refs', 'editor.gotoBracket', '-', 'editor.nextProblem', 'editor.nextBookmark', 'editor.prevBookmark']],
+  ['Run', ['run.run', 'run.selection', 'run.stop', '-', 'view.preview', 'run.clear', 'view.run', '-', 'view.languages']],
+  ['Terminal', ['terminal.new', 'view.terminal', 'terminal.runFile', 'terminal.runSelection', 'terminal.here', '-', 'view.output', 'view.togglePanel']],
+  ['Help', ['view.welcome', 'help.shortcuts', 'pref.keybindings', 'view.palette', 'view.languages', 'settings.open', 'theme.select', 'notifications.show', 'pref.reset', '-', 'help.about']],
 ];
 
 export function TitleBar() {
@@ -24,7 +24,7 @@ export function TitleBar() {
     return () => window.removeEventListener('click', c);
   }, []);
   const byId = Object.fromEntries(ide.commands.map((c) => [c.id, c]));
-  const title = ide.activeFile ? (isSpecialTab(ide.activeFile) ? ide.activeFile.replace(/^diff:/, '').replace(/__/g, '') : basename(ide.activeFile)) : 'workspace';
+  const title = ide.activeFile ? (isSpecialTab(ide.activeFile) ? (ide.activeFile.startsWith('cmp:') ? 'compare' : ide.activeFile.replace(/^diff:/, '').replace(/__/g, '')) : basename(ide.activeFile)) : 'workspace';
 
   return (
     <div className="flex items-center h-[34px] bg-[var(--act)] border-b border-[var(--border)] text-[13px] shrink-0 select-none">
@@ -47,7 +47,7 @@ export function TitleBar() {
                 return (
                   <button key={id} onClick={() => { setOpen(null); c.run(); }} className="flex items-center w-full px-4 h-[26px] text-left hover:bg-[var(--accent)] hover:text-white gap-6">
                     <span className="flex-1 truncate">{c.label}</span>
-                    {(c.key ?? c.hint) && <span className="text-[11px] opacity-60">{c.key ?? c.hint}</span>}
+                    {(c.key ?? c.hint) && <span className="text-[11px] opacity-60">{prettyKey(c.key ?? c.hint ?? '')}</span>}
                   </button>
                 );
               })}
@@ -64,7 +64,7 @@ export function TitleBar() {
         {[
           [PanelLeft, 'Toggle Sidebar (Ctrl+B)', ide.sidebarOpen, () => ide.setSidebarOpen(!ide.sidebarOpen)],
           [PanelBottom, 'Toggle Panel (Ctrl+J)', ide.panelOpen, () => ide.setPanelOpen(!ide.panelOpen)],
-          [Columns2, 'Split Editor', ide.groups.length > 1, ide.splitEditor],
+          [Columns2, 'Split Editor Right (Ctrl+\\)', ide.groups.length > 1, ide.splitEditor],
           [Eye, 'Toggle Preview', !!ide.previewPath, () => ide.setPreviewPath(ide.previewPath ? null : ide.activeFile)],
           [CmdIcon, 'Command Palette', false, () => ide.openPalette('commands')],
         ].map(([I, t, a, fn]: any, i) => (
@@ -86,17 +86,18 @@ export function ActivityBar() {
     ['run', Play, 'Run & Debug (Ctrl+Shift+D)', errors],
     ['tools', Wrench, 'Developer Tools (Ctrl+Shift+T)'],
     ['snippets', Zap, 'Snippets (Ctrl+Shift+S)'],
-    ['extensions', Puzzle, 'Extensions (Ctrl+Shift+X)'],
+    ['extensions', Puzzle, 'Languages, Runtimes & Features (Ctrl+Shift+X)'],
+    ['bookmarks', Bookmark, 'Bookmarks', ide.bookmarks.length],
   ];
   return (
-    <div className="w-12 flex flex-col items-center bg-[var(--act)] border-r border-[var(--border)] shrink-0 py-1">
+    <div className={`w-12 flex flex-col items-center bg-[var(--act)] ${ide.settings.sidebarPosition === 'right' ? 'border-l' : 'border-r'} border-[var(--border)] shrink-0 py-1`}>
       {items.map(([v, I, t, badge]) => {
         const active = ide.sidebarOpen && ide.sidebarView === v;
         return (
           <button key={v} title={t} onClick={() => { if (active) ide.setSidebarOpen(false); else { ide.setSidebarView(v); ide.setSidebarOpen(true); } }} className={`relative w-12 h-12 flex items-center justify-center ${active ? 'text-[var(--fg)]' : 'text-[var(--muted)] hover:text-[var(--fg)]'}`}>
-            {active && <span className="absolute left-0 top-2 bottom-2 w-[2px] bg-[var(--accent)]" />}
+            {active && <span className={`absolute ${ide.settings.sidebarPosition === 'right' ? 'right-0' : 'left-0'} top-2 bottom-2 w-[2px] bg-[var(--accent)]`} />}
             <I size={23} strokeWidth={1.5} />
-            {!!badge && <span className={`absolute bottom-2 right-2 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold flex items-center justify-center text-white ${v === 'run' ? 'bg-red-500' : 'bg-[var(--accent)]'}`}>{badge > 99 ? '99+' : badge}</span>}
+            {!!badge && <span className={`absolute bottom-2 right-2 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold flex items-center justify-center text-white ${v === 'run' ? 'bg-red-500' : v === 'bookmarks' ? 'bg-blue-500' : 'bg-[var(--accent)]'}`}>{badge > 99 ? '99+' : badge}</span>}
           </button>
         );
       })}

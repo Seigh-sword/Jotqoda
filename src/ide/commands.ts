@@ -1,5 +1,7 @@
-import type { Command, IDE, SidebarView } from './types';
-import { DEFAULT_SETTINGS } from './types';
+import type { Command, IDE, SidebarView, QuickPickItem } from './types';
+import { DEFAULT_SETTINGS, basename } from './types';
+import { getLang, getLangById, LANGUAGES, RUNNABLE_LANGS } from './languages';
+import { historyStats, clearAllHistory, historyPaths } from './history';
 import { THEMES } from './themes';
 import { WORKSPACE_TEMPLATES, FILE_TEMPLATES } from './templates';
 import { cases, lorem } from '../components/ToolsView';
@@ -45,11 +47,42 @@ export function buildCommands(ide: IDE, ctx: Ctx): Command[] {
     const name = await ide.prompt('New file name (use / for folders)', ext ? `untitled.${ext}` : '', 'e.g. src/app.ts');
     if (name) ide.createFile(name.trim(), undefined, true);
   };
+  const activeLang = () => {
+    const f = ide.activeFile;
+    if (!f || ide.files[f] == null) return null;
+    return ide.langOverride[f] ? getLangById(ide.langOverride[f]) : getLang(f, ide.files[f]);
+  };
   const commentPrefix = () => {
-    const id = ide.getEditor()?.getModel()?.getLanguageId() ?? 'plaintext';
-    if (['python', 'ruby', 'shellscript', 'yaml', 'toml', 'ini', 'makefile', 'perl', 'r', 'dockerfile', 'graphql', 'julia', 'elixir', 'sql'].includes(id)) return '# ';
-    if (['html', 'xml', 'markdown', 'vue', 'svelte', 'svg'].includes(id)) return '<!-- ';
+    const l = activeLang();
+    if (l?.comment) return l.comment + ' ';
+    if (l?.block) return l.block[0] + ' ';
     return '// ';
+  };
+  const commentSuffix = () => { const l = activeLang(); return !l?.comment && l?.block ? ' ' + l.block[1] : ''; };
+  const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+  const bookmarkJump = (dir: 1 | -1) => {
+    const list = [...ide.bookmarks].sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line);
+    if (!list.length) return ide.toast('No bookmarks — Ctrl+Alt+K toggles one', 'info');
+    const f = ide.activeFile ?? '';
+    const line = ide.cursor.line;
+    const idx = list.findIndex((b) => (dir > 0 ? b.path > f || (b.path === f && b.line > line) : false));
+    let target;
+    if (dir > 0) target = idx >= 0 ? list[idx] : list[0];
+    else { const before = list.filter((b) => b.path < f || (b.path === f && b.line < line)); target = before.length ? before[before.length - 1] : list[list.length - 1]; }
+    ide.revealAt(target.path, target.line);
+  };
+  const pickFile = async (placeholder: string, exclude?: string) => {
+    const items: QuickPickItem[] = Object.keys(ide.files).filter((p) => p !== exclude).sort().map((p) => ({ id: p, label: basename(p), description: p }));
+    return (await ide.quickPick(items, placeholder))?.id ?? null;
+  };
+  const showHistory = async () => {
+    const f = requireFile();
+    if (!f) return;
+    const entries = ide.historyOf(f);
+    if (!entries.length) return ide.toast(ide.settings.localHistory ? `No local history for ${basename(f)} yet — save the file to create a snapshot` : 'Local History is disabled in Settings', 'info');
+    const pick = await ide.quickPick(entries.map((e) => ({ id: e.id, label: `${e.source} · ${new Date(e.time).toLocaleString()}`, description: `${e.content.split('\n').length} lines` })), `Local history of ${basename(f)} — pick a snapshot to compare`);
+    const e = entries.find((x) => x.id === pick?.id);
+    if (e) ide.openCompare({ label: `${basename(f)} (${new Date(e.time).toLocaleTimeString()})`, path: f, kind: 'history', content: e.content }, { label: basename(f), path: f, kind: 'file' });
   };
   const activeExt = () => {
     const f = ide.activeFile ?? '';
@@ -84,7 +117,10 @@ export function buildCommands(ide: IDE, ctx: Ctx): Command[] {
     { id: 'file.createSibling', label: 'Create File Next to Active File…', category: 'File', run: async () => { const f = requireFile(); if (!f) return; const base = f.slice(0, f.lastIndexOf('/') + 1); const n = await ide.prompt('New file name', '', 'e.g. helper.ts'); if (n) ide.createFile(base + n.trim(), undefined, true); } },
     ...['ts', 'js', 'py', 'html', 'css', 'md', 'json', 'sql'].map((ext) => ({ id: 'file.new.' + ext, label: `New ${ext.toUpperCase()} File…`, category: 'File', run: () => newFile(ext) })),
     { id: 'workspace.export', label: 'Export Workspace (JSON)', category: 'Workspace', run: () => { download('workspace.jotqoda.json', JSON.stringify({ files: ide.files, folders: ide.folders }, null, 2), 'application/json'); ide.toast('Workspace exported', 'success'); } },
-    { id: 'workspace.import', label: 'Import Workspace (JSON)…', category: 'Workspace', run: ctx.importWorkspace },
+    { id: 'workspace.import', label: 'Import Workspace (JSON or ZIP)…', category: 'Workspace', run: ctx.importWorkspace },
+    { id: 'workspace.downloadZip', label: 'Download Workspace as ZIP', category: 'Workspace', run: () => ide.downloadZip() },
+    { id: 'workspace.importZip', label: 'Import ZIP Archive…', category: 'Workspace', run: () => ide.importZip() },
+    { id: 'workspace.openFolder', label: 'Open Local Folder… (replaces workspace)', category: 'Workspace', run: () => ide.importFolder() },
     { id: 'workspace.template', label: 'Load Template…', category: 'Workspace', run: () => ide.openPalette('template') },
     ...Object.entries(WORKSPACE_TEMPLATES).map(([k, t]) => ({ id: 'template.' + k, label: `Load Template: ${t.name}`, category: 'Workspace', run: () => { if (Object.keys(ide.files).length && !confirm(`Replace current workspace with "${t.name}"?`)) return; ide.loadWorkspace(structuredClone(t.ws.files), [...t.ws.folders]); ide.toast(`Loaded ${t.name}`, 'success'); } })),
     { id: 'workspace.reset', label: 'Reset Everything (factory)', category: 'Workspace', run: () => { if (confirm('Erase all files, history and settings?')) { localStorage.removeItem('jotqoda-v1'); location.reload(); } } },
@@ -93,7 +129,21 @@ export function buildCommands(ide: IDE, ctx: Ctx): Command[] {
     { id: 'view.paletteF1', label: 'Command Palette (F1)', category: 'View', key: 'F1', run: () => ide.openPalette('commands') },
     { id: 'view.quickOpen', label: 'Go to File…', category: 'View', key: 'Ctrl+P', run: () => ide.openPalette('files') },
     { id: 'view.gotoLine', label: 'Go to Line…', category: 'Go', key: 'Ctrl+G', run: () => ide.openPalette('line') },
-    { id: 'view.gotoSymbol', label: 'Go to Symbol in Editor…', category: 'Go', hint: 'Ctrl+Shift+O', run: trig('editor.action.quickOutline') },
+    { id: 'view.gotoSymbol', label: 'Go to Symbol in Editor…', category: 'Go', hint: 'Ctrl+Shift+O', run: () => ide.openPalette('symbols') },
+    { id: 'go.workspaceSymbol', label: 'Go to Symbol in Workspace…', category: 'Go', key: 'Ctrl+Alt+O', run: () => ide.openPalette('workspaceSymbols') },
+    { id: 'go.back', label: 'Go Back', category: 'Go', key: IS_MAC ? undefined : 'Alt+ArrowLeft', run: () => ide.goBack() },
+    { id: 'go.forward', label: 'Go Forward', category: 'Go', key: IS_MAC ? undefined : 'Alt+ArrowRight', run: () => ide.goForward() },
+    { id: 'view.reopenClosed', label: 'Reopen Closed Editor', category: 'View', run: () => ide.reopenClosed() },
+    { id: 'view.pinEditor', label: 'Pin / Unpin Editor', category: 'View', run: () => { const f = ide.activeFile; if (f) ide.togglePin(f, ide.activeGroup); } },
+    { id: 'view.closeToRight', label: 'Close Editors to the Right', category: 'View', run: () => { const f = ide.activeFile; if (f) ide.closeToRight(f, ide.activeGroup); } },
+    { id: 'view.closeSaved', label: 'Close Saved Editors', category: 'View', run: () => ide.closeSaved() },
+    { id: 'view.closeGroup', label: 'Close Editor Group', category: 'View', run: () => ide.closeGroup(ide.activeGroup) },
+    { id: 'view.joinGroups', label: 'Join All Editor Groups', category: 'View', run: () => ide.joinGroups() },
+    ...[0, 1, 2, 3].map((i) => ({ id: `view.focusGroup${i + 1}`, label: `Focus Editor Group ${i + 1}`, category: 'View', run: () => { if (i < ide.groups.length) { ide.setActiveGroup(i); setTimeout(() => ide.editors.current[i]?.focus?.(), 0); } else ide.toast(`Editor group ${i + 1} does not exist`, 'info'); } })),
+    { id: 'view.moveEditorNext', label: 'Move Editor into Next Group', category: 'View', run: () => { const f = ide.activeFile; if (f) ide.moveTab(f, ide.activeGroup, ide.activeGroup + 1); } },
+    { id: 'view.moveEditorPrev', label: 'Move Editor into Previous Group', category: 'View', run: () => { const f = ide.activeFile; if (f && ide.activeGroup > 0) ide.moveTab(f, ide.activeGroup, ide.activeGroup - 1); } },
+    { id: 'view.bookmarks', label: 'Show Bookmarks', category: 'View', run: view('bookmarks') },
+    { id: 'view.languages', label: 'Show Supported Languages & Runtimes', category: 'Help', run: () => { ide.setSidebarView('extensions'); ide.setSidebarOpen(true); } },
     { id: 'view.toggleSidebar', label: 'Toggle Primary Sidebar', category: 'View', key: 'Ctrl+B', run: () => ide.setSidebarOpen(!ide.sidebarOpen) },
     { id: 'view.togglePanel', label: 'Toggle Panel', category: 'View', key: 'Ctrl+J', run: () => ide.setPanelOpen(!ide.panelOpen) },
     { id: 'view.terminal', label: 'Toggle Terminal', category: 'View', key: 'Ctrl+`', run: () => { if (ide.panelOpen && ide.panelTab === 'terminal') ide.setPanelOpen(false); else { ide.setPanelOpen(true); ide.setPanelTab('terminal'); } } },
@@ -107,7 +157,7 @@ export function buildCommands(ide: IDE, ctx: Ctx): Command[] {
     { id: 'view.extensions', label: 'Show Extensions', category: 'View', key: 'Ctrl+Shift+X', run: view('extensions') },
     { id: 'view.tools', label: 'Show Developer Tools', category: 'View', key: 'Ctrl+Shift+T', run: view('tools') },
     { id: 'view.snippets', label: 'Show Snippets', category: 'View', key: 'Ctrl+Shift+S', run: view('snippets') },
-    { id: 'view.split', label: 'Split Editor', category: 'View', key: 'Ctrl+\\', run: () => ide.splitEditor() },
+    { id: 'view.split', label: 'Split Editor Right', category: 'View', key: 'Ctrl+\\', run: () => ide.splitEditor() },
     { id: 'view.zen', label: 'Toggle Zen Mode', category: 'View', key: 'Ctrl+Alt+Z', run: () => ctx.setZen(!ctx.zen) },
     { id: 'view.fullscreen', label: 'Toggle Full Screen', category: 'View', key: 'Shift+F11', run: () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()) },
     { id: 'view.preview', label: 'Toggle Live Preview', category: 'View', key: 'Ctrl+Shift+V', run: () => ide.setPreviewPath(ide.previewPath ? null : ide.activeFile) },
@@ -130,7 +180,54 @@ export function buildCommands(ide: IDE, ctx: Ctx): Command[] {
     { id: 'view.cursorBlinking', label: 'Cycle Cursor Blinking', category: 'View', run: () => ide.setSetting('cursorBlinking', ({ blink: 'smooth', smooth: 'phase', phase: 'expand', expand: 'solid', solid: 'blink' } as const)[ide.settings.cursorBlinking]) },
     { id: 'view.renderWhitespace', label: 'Cycle Render Whitespace', category: 'View', run: () => ide.setSetting('renderWhitespace', ({ none: 'boundary', boundary: 'all', all: 'none' } as const)[ide.settings.renderWhitespace]) },
     { id: 'view.welcome', label: 'Show Welcome Page', category: 'Help', run: () => ide.openFile('__welcome__') },
-    { id: 'editor.format', label: 'Format Document', category: 'Editor', key: 'Shift+Alt+F', run: trig('editor.action.formatDocument') },
+    { id: 'editor.format', label: 'Format Document', category: 'Editor', key: 'Shift+Alt+F', run: () => { ide.formatDocument().then((ok) => ok && ide.toast('Document formatted', 'success')); } },
+    { id: 'editor.formatMonaco', label: 'Format Document (Monaco built-in formatter)', category: 'Editor', run: trig('editor.action.formatDocument') },
+    { id: 'editor.changeIndent', label: 'Change Indentation…', category: 'Editor', run: async () => {
+      const pick = await ide.quickPick([
+        { id: 'spaces', label: 'Indent Using Spaces', description: ide.settings.insertSpaces ? 'current' : '' },
+        { id: 'tabs', label: 'Indent Using Tabs', description: !ide.settings.insertSpaces ? 'current' : '' },
+        ...[2, 4, 8].map((n) => ({ id: 'size' + n, label: `Tab Display Size: ${n}`, description: ide.settings.tabSize === n ? 'current' : '' })),
+        { id: 'toSpaces', label: 'Convert Indentation to Spaces' },
+        { id: 'toTabs', label: 'Convert Indentation to Tabs' },
+        { id: 'detect', label: 'Detect Indentation from Content' },
+      ], 'Select indentation action');
+      if (!pick) return;
+      if (pick.id === 'spaces') ide.setSetting('insertSpaces', true);
+      else if (pick.id === 'tabs') ide.setSetting('insertSpaces', false);
+      else if (pick.id?.startsWith('size')) ide.setSetting('tabSize', +pick.id.slice(4));
+      else if (pick.id === 'toSpaces') trig('editor.action.indentationToSpaces')();
+      else if (pick.id === 'toTabs') trig('editor.action.indentationToTabs')();
+      else if (pick.id === 'detect') { const e = ed(); if (!e) return; const text = e.getValue(); const tabs = (text.match(/^\t/gm) ?? []).length; const sp = text.match(/^ +(?=\S)/gm) ?? []; const g = sp.length ? sp.map((x: string) => x.length).reduce((a: number, b: number) => { const gcd = (x: number, y: number): number => (y ? gcd(y, x % y) : x); return gcd(a, b); }) : 0; if (tabs > sp.length) { ide.setSetting('insertSpaces', false); ide.toast('Detected: tabs'); } else if (g) { ide.setSetting('insertSpaces', true); ide.setSetting('tabSize', Math.min(8, g)); ide.toast(`Detected: ${Math.min(8, g)} spaces`); } else ide.toast('Could not detect indentation', 'info'); }
+    } },
+    { id: 'editor.changeEol', label: 'Change End of Line Sequence…', category: 'Editor', run: async () => {
+      const e = ed(); if (!e) return;
+      const cur = e.getModel().getEOL() === '\r\n' ? 'CRLF' : 'LF';
+      const pick = await ide.quickPick([{ id: 'LF', label: 'LF', description: cur === 'LF' ? 'current' : 'Unix / macOS' }, { id: 'CRLF', label: 'CRLF', description: cur === 'CRLF' ? 'current' : 'Windows' }], 'Select End of Line Sequence');
+      if (pick && pick.id !== cur) { e.getModel().pushEOL(pick.id === 'CRLF' ? 1 : 0); ide.toast(`Line endings: ${pick.id}`); }
+    } },
+    { id: 'editor.toggleBookmark', label: 'Toggle Bookmark', category: 'Bookmarks', key: 'Ctrl+Alt+K', run: () => ide.toggleBookmark() },
+    { id: 'editor.nextBookmark', label: 'Go to Next Bookmark', category: 'Bookmarks', key: 'Ctrl+Alt+L', run: () => bookmarkJump(1) },
+    { id: 'editor.prevBookmark', label: 'Go to Previous Bookmark', category: 'Bookmarks', key: 'Ctrl+Alt+J', run: () => bookmarkJump(-1) },
+    { id: 'editor.clearBookmarks', label: 'Clear Bookmarks in Active File', category: 'Bookmarks', run: () => ide.clearBookmarks(ide.activeFile ?? undefined) },
+    { id: 'editor.clearAllBookmarks', label: 'Clear All Bookmarks', category: 'Bookmarks', run: () => ide.clearBookmarks() },
+    { id: 'compare.saved', label: 'Compare Active File with Saved', category: 'Compare', run: () => { const f = requireFile(); if (f) ide.openCompare({ label: basename(f) + ' (saved)', path: f, kind: 'saved' }, { label: basename(f), path: f, kind: 'file' }); } },
+    { id: 'compare.head', label: 'Compare Active File with HEAD (last commit)', category: 'Compare', run: () => { const f = requireFile(); if (f) ide.openCompare({ label: basename(f) + ' (HEAD)', path: f, kind: 'head' }, { label: basename(f), path: f, kind: 'file' }); } },
+    { id: 'compare.file', label: 'Compare Active File With…', category: 'Compare', run: async () => { const f = requireFile(); if (!f) return; const o = await pickFile(`Compare ${basename(f)} with…`, f); if (o) ide.openCompare({ label: basename(o), path: o, kind: 'file' }, { label: basename(f), path: f, kind: 'file' }); } },
+    { id: 'compare.clipboard', label: 'Compare Active File with Clipboard', category: 'Compare', run: async () => { const f = requireFile(); if (!f) return; try { const t = await navigator.clipboard.readText(); ide.openCompare({ label: 'Clipboard', kind: 'text', content: t }, { label: basename(f), path: f, kind: 'file' }); } catch { ide.toast('Clipboard access was denied by the browser', 'error'); } } },
+    { id: 'compare.two', label: 'Compare Two Files…', category: 'Compare', run: async () => { const a = await pickFile('Select the first (left) file'); if (!a) return; const b = await pickFile('Select the second (right) file', a); if (b) ide.openCompare({ label: basename(a), path: a, kind: 'file' }, { label: basename(b), path: b, kind: 'file' }); } },
+    { id: 'history.show', label: 'Local History: Show Snapshots of Active File…', category: 'Local History', run: showHistory },
+    { id: 'history.snapshot', label: 'Local History: Create Snapshot Now', category: 'Local History', run: () => { const f = requireFile(); if (f) { ide.snapshot(f, 'Manual snapshot'); ide.toast('Snapshot created', 'success'); } } },
+    { id: 'history.restoreLatest', label: 'Local History: Restore Previous Snapshot', category: 'Local History', run: () => { const f = requireFile(); if (!f) return; const e = ide.historyOf(f).find((x) => x.content !== ide.files[f]); if (!e) return ide.toast('No earlier snapshot differs from the current content', 'info'); ide.restoreSnapshot(f, e.id); } },
+    { id: 'history.restoreDeleted', label: 'Local History: Restore Deleted File…', category: 'Local History', run: async () => {
+      const gone = historyPaths().filter((p) => ide.files[p] == null).sort();
+      if (!gone.length) return ide.toast('Local History has no snapshots of deleted files', 'info');
+      const pick = await ide.quickPick(gone.map((p) => { const e = ide.historyOf(p)[0]; return { id: p, label: basename(p), description: `${p} · ${e ? new Date(e.time).toLocaleString() : ''}` }; }), 'Select a deleted file to restore (latest snapshot)');
+      const e = pick?.id ? ide.historyOf(pick.id)[0] : undefined;
+      if (pick?.id && e) ide.restoreSnapshot(pick.id, e.id);
+    } },
+    { id: 'history.clearFile', label: 'Local History: Delete Snapshots of Active File', category: 'Local History', run: () => { const f = requireFile(); if (f && confirm(`Delete all local history of ${f}?`)) ide.deleteSnapshot(f); } },
+    { id: 'history.clearAll', label: 'Local History: Delete All Snapshots', category: 'Local History', run: () => { const st = historyStats(); if (confirm(`Delete ${st.snapshots} snapshot(s) of ${st.files} file(s)?`)) { clearAllHistory(); ide.toast('Local history cleared'); } } },
+    { id: 'history.stats', label: 'Local History: Show Storage Usage', category: 'Local History', run: () => { const st = historyStats(); ide.toast(`${st.snapshots} snapshot(s) · ${st.files} file(s) · ${(st.chars / 1024).toFixed(0)} KB`, 'info'); } },
     { id: 'editor.formatSel', label: 'Format Selection', category: 'Editor', run: trig('editor.action.formatSelection') },
     { id: 'editor.find', label: 'Find', category: 'Edit', hint: 'Ctrl+F', run: trig('actions.find') },
     { id: 'editor.replace', label: 'Replace', category: 'Edit', hint: 'Ctrl+H', run: trig('editor.action.startFindReplaceAction') },
@@ -210,16 +307,20 @@ export function buildCommands(ide: IDE, ctx: Ctx): Command[] {
     { id: 'insert.uuid', label: 'Insert UUID', category: 'Insert', run: insert(() => crypto.randomUUID()) },
     { id: 'insert.lorem', label: 'Insert Lorem Ipsum', category: 'Insert', run: insert(() => lorem(40)) },
     { id: 'insert.color', label: 'Insert Random Color', category: 'Insert', run: insert(() => '#' + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, '0')) },
-    { id: 'insert.template', label: 'Insert Language Boilerplate', category: 'Insert', run: () => { const e = ed(); if (!e) return; const lang = e.getModel().getLanguageId(); const t = FILE_TEMPLATES[lang]; if (!t) return ide.toast('No boilerplate for ' + lang, 'warn'); e.executeEdits('jotqoda', [{ range: e.getSelection(), text: t }]); } },
-    { id: 'insert.todo', label: 'Insert TODO Comment', category: 'Insert', run: insert(() => commentPrefix() + 'TODO: ') },
-    { id: 'insert.fixme', label: 'Insert FIXME Comment', category: 'Insert', run: insert(() => commentPrefix() + 'FIXME: ') },
-    { id: 'insert.separator', label: 'Insert Comment Separator', category: 'Insert', run: insert(() => commentPrefix() + '-'.repeat(60)) },
-    { id: 'insert.banner', label: 'Insert File Banner', category: 'Insert', run: insert(() => commentPrefix() + (ide.activeFile ?? 'untitled') + '  ·  ' + new Date().toISOString().slice(0, 10)) },
+    { id: 'insert.template', label: 'Insert Language Boilerplate', category: 'Insert', run: () => { const e = ed(); if (!e) return; const l = activeLang(); const t = l ? FILE_TEMPLATES[l.id] ?? FILE_TEMPLATES[l.monaco] : undefined; if (!t) return ide.toast('No boilerplate for ' + (l?.name ?? 'this file'), 'warn'); e.executeEdits('jotqoda', [{ range: e.getSelection(), text: t }]); } },
+    { id: 'insert.todo', label: 'Insert TODO Comment', category: 'Insert', run: insert(() => commentPrefix() + 'TODO: ' + commentSuffix()) },
+    { id: 'insert.fixme', label: 'Insert FIXME Comment', category: 'Insert', run: insert(() => commentPrefix() + 'FIXME: ' + commentSuffix()) },
+    { id: 'insert.separator', label: 'Insert Comment Separator', category: 'Insert', run: insert(() => commentPrefix() + '-'.repeat(60) + commentSuffix()) },
+    { id: 'insert.banner', label: 'Insert File Banner', category: 'Insert', run: insert(() => commentPrefix() + (ide.activeFile ?? 'untitled') + '  ·  ' + new Date().toISOString().slice(0, 10) + commentSuffix()) },
     { id: 'run.run', label: 'Run Active File', category: 'Run', key: 'F5', run: () => ide.run() },
     { id: 'run.run2', label: 'Run Active File (Ctrl+Enter)', category: 'Run', key: 'Ctrl+Enter', run: () => ide.run() },
     { id: 'run.stop', label: 'Stop Execution', category: 'Run', key: 'Shift+F5', run: () => ide.stop() },
     { id: 'run.selection', label: 'Run Selected JavaScript', category: 'Run', run: () => { const e = ed(); if (!e) return; const s = e.getModel().getValueInRange(e.getSelection()); if (!s) return ide.toast('Select some JS first', 'warn'); ide.writeFile('.jotqoda/selection.js', s); ide.run('.jotqoda/selection.js'); } },
     { id: 'run.clear', label: 'Clear Output', category: 'Run', run: () => ide.clearOutput() },
+    { id: 'terminal.new', label: 'Create New Terminal', category: 'Terminal', key: 'Ctrl+Shift+`', run: () => ide.requestTerminal({ newTerminal: true }) },
+    { id: 'terminal.runFile', label: 'Run Active File in Terminal', category: 'Terminal', run: () => { const f = requireFile(); if (f) ide.requestTerminal({ command: `run ${f}` }); } },
+    { id: 'terminal.runSelection', label: 'Run Selected Text in Terminal', category: 'Terminal', run: () => { const e = ed(); if (!e) return; const t = e.getModel().getValueInRange(e.getSelection()); if (!t.trim()) return ide.toast('Select a command first', 'warn'); ide.requestTerminal({ command: t.split('\n')[0] }); } },
+    { id: 'terminal.here', label: "Open Terminal in Active File's Folder", category: 'Terminal', run: () => { const f = requireFile(); if (f) ide.requestTerminal({ cwd: f.includes('/') ? f.slice(0, f.lastIndexOf('/')) : '' }); } },
     { id: 'git.commit', label: 'Commit All…', category: 'Git', run: async () => { const m = await ide.prompt('Commit message', ''); if (m) ide.commit(m); } },
     { id: 'git.discardFile', label: 'Discard Changes in Active File', category: 'Git', run: () => ide.activeFile && ide.discard(ide.activeFile) },
     { id: 'git.diff', label: 'Open Diff for Active File', category: 'Git', run: () => ide.activeFile && ide.openFile('diff:' + ide.activeFile) },
@@ -229,6 +330,19 @@ export function buildCommands(ide: IDE, ctx: Ctx): Command[] {
     { id: 'theme.select', label: 'Color Theme…', category: 'Preferences', key: 'Ctrl+Alt+T', run: () => ide.openPalette('theme') },
     ...THEMES.map((t) => ({ id: 'theme.' + t.id, label: `Theme: ${t.name}`, category: 'Preferences', run: () => ide.setSetting('theme', t.id) })),
     { id: 'language.change', label: 'Change Language Mode…', category: 'Preferences', key: 'Ctrl+Alt+M', run: () => ide.openPalette('language') },
+    { id: 'language.detect', label: 'Auto Detect Language of Active File', category: 'Preferences', run: () => { const f = requireFile(); if (!f) return; ide.setLangOverride(f, ''); ide.toast(`Detected: ${getLang(f, ide.files[f]).name}`); } },
+    { id: 'notifications.show', label: 'Notifications: Show Notification History', category: 'Notifications', run: async () => { ide.markNotificationsRead(); if (!ide.notifications.length) return ide.toast('No notifications', 'info'); await ide.quickPick(ide.notifications.map((n) => ({ id: String(n.id), label: n.msg, description: `${n.type} · ${new Date(n.time).toLocaleTimeString()}` })), 'Notification history'); } },
+    { id: 'notifications.clear', label: 'Notifications: Clear All', category: 'Notifications', run: () => ide.clearNotifications() },
+    { id: 'notifications.dnd', label: 'Notifications: Toggle Do Not Disturb', category: 'Notifications', run: toggle('doNotDisturb', 'Do Not Disturb') },
+    { id: 'layout.sidebarPosition', label: 'Toggle Primary Sidebar Position (Left/Right)', category: 'Layout', run: () => ide.setSetting('sidebarPosition', ide.settings.sidebarPosition === 'left' ? 'right' : 'left') },
+    { id: 'layout.activityBar', label: 'Toggle Activity Bar Visibility', category: 'Layout', run: toggle('activityBar', 'Activity bar') },
+    { id: 'layout.statusBar', label: 'Toggle Status Bar Visibility', category: 'Layout', run: toggle('statusBar', 'Status bar') },
+    { id: 'layout.centered', label: 'Toggle Centered Layout', category: 'Layout', run: toggle('centeredLayout', 'Centered layout') },
+    { id: 'pref.emmet', label: 'Toggle Emmet', category: 'Preferences', run: toggle('emmet', 'Emmet') },
+    { id: 'pref.prettier', label: 'Toggle Prettier Formatter', category: 'Preferences', run: toggle('prettier', 'Prettier') },
+    { id: 'pref.localHistory', label: 'Toggle Local History', category: 'Preferences', run: toggle('localHistory', 'Local history') },
+    { id: 'pref.trimWhitespace', label: 'Toggle Trim Trailing Whitespace on Save', category: 'Preferences', run: toggle('trimTrailingWhitespace', 'Trim trailing whitespace on save') },
+    { id: 'pref.keybindings', label: 'Open Keyboard Shortcuts (editable)', category: 'Preferences', run: () => ide.setShortcutsOpen(true) },
     { id: 'pref.autoSave', label: 'Toggle Auto Save', category: 'Preferences', run: toggle('autoSave', 'Auto save') },
     { id: 'pref.formatOnSave', label: 'Toggle Format on Save', category: 'Preferences', run: toggle('formatOnSave', 'Format on save') },
     { id: 'pref.ligatures', label: 'Toggle Font Ligatures', category: 'Preferences', run: toggle('ligatures', 'Ligatures') },
@@ -238,7 +352,7 @@ export function buildCommands(ide: IDE, ctx: Ctx): Command[] {
     { id: 'pref.lineHeight', label: 'Increase Line Height', category: 'Preferences', run: () => ide.setSetting('lineHeight', Math.min(40, ide.settings.lineHeight + 2)) },
     { id: 'pref.reset', label: 'Reset All Settings to Defaults', category: 'Preferences', run: () => { if (!confirm('Reset every setting to its default value?')) return; (Object.keys(DEFAULT_SETTINGS) as (keyof typeof DEFAULT_SETTINGS)[]).forEach((k) => ide.setSetting(k, DEFAULT_SETTINGS[k])); ide.toast('Settings reset to defaults', 'success'); } },
     { id: 'help.shortcuts', label: 'Keyboard Shortcuts Reference', category: 'Help', key: 'Ctrl+K', run: () => ide.setShortcutsOpen(true) },
-    { id: 'help.about', label: 'About JotQoda', category: 'Help', run: () => ide.toast('JotQoda 3.0 — Monaco engine · 75+ languages · built with React + Vite', 'info') },
+    { id: 'help.about', label: 'About JotQoda', category: 'Help', run: () => ide.toast(`JotQoda 3.1 — Monaco engine · ${LANGUAGES.length} languages · ${RUNNABLE_LANGS.length} runnable in-browser · ${THEMES.length} themes · ${C.length} commands`, 'info') },
   ];
   return C;
 }

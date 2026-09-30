@@ -3,6 +3,7 @@ import { X, Search, RotateCcw } from 'lucide-react';
 import { useIDE, DEFAULT_SETTINGS, type Settings } from '../ide/types';
 import { THEMES } from '../ide/themes';
 import { Kbd } from './FileIcon';
+import { keyString, normKey } from '../ide/keys';
 
 function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   return (
@@ -25,16 +26,33 @@ const SECTIONS: [string, Field[]][] = [
     { k: 'fontSize', label: 'Font Size', desc: 'Editor font size in pixels', type: 'num', min: 8, max: 40 },
     { k: 'lineHeight', label: 'Line Height', desc: 'Line height in pixels', type: 'num', min: 12, max: 60 },
     { k: 'fontFamily', label: 'Font Family', desc: 'Editor font stack', type: 'text' },
+    { k: 'fontWeight', label: 'Font Weight', desc: 'Editor font weight', type: 'select', opts: ['normal', '300', '500', '600', 'bold'] },
+    { k: 'letterSpacing', label: 'Letter Spacing', desc: 'Letter spacing in pixels', type: 'num', min: -2, max: 5 },
     { k: 'ligatures', label: 'Font Ligatures', desc: 'Enable programming ligatures', type: 'bool' },
     { k: 'minimap', label: 'Minimap', desc: 'Show the minimap', type: 'bool' },
+    { k: 'minimapSide', label: 'Minimap Side', desc: 'Render the minimap on the left or right', type: 'select', opts: ['right', 'left'] },
+    { k: 'minimapRenderCharacters', label: 'Minimap Characters', desc: 'Render actual characters instead of color blocks', type: 'bool' },
     { k: 'lineNumbers', label: 'Line Numbers', desc: 'Line number style', type: 'select', opts: ['on', 'off', 'relative'] },
+    { k: 'rulers', label: 'Rulers', desc: 'Vertical rulers at these columns (comma separated, e.g. 80,120)', type: 'text' },
     { k: 'renderWhitespace', label: 'Render Whitespace', desc: 'How whitespace is rendered', type: 'select', opts: ['none', 'boundary', 'all'] },
+    { k: 'renderControlCharacters', label: 'Render Control Characters', desc: 'Show invisible control characters', type: 'bool' },
     { k: 'renderLineHighlight', label: 'Line Highlight', desc: 'Current line highlight', type: 'select', opts: ['all', 'line', 'gutter', 'none'] },
-    { k: 'showBreadcrumbs', label: 'Breadcrumbs', desc: 'Show file path breadcrumbs', type: 'bool' },
+    { k: 'showBreadcrumbs', label: 'Breadcrumbs', desc: 'Show path & symbol breadcrumbs', type: 'bool' },
+    { k: 'glyphMargin', label: 'Glyph Margin', desc: 'Gutter column used for bookmarks', type: 'bool' },
+  ]],
+  ['Workbench', [
+    { k: 'sidebarPosition', label: 'Primary Sidebar Position', desc: 'Show the sidebar & activity bar on the left or right', type: 'select', opts: ['left', 'right'] },
+    { k: 'activityBar', label: 'Activity Bar', desc: 'Show the activity bar', type: 'bool' },
+    { k: 'statusBar', label: 'Status Bar', desc: 'Show the status bar', type: 'bool' },
+    { k: 'centeredLayout', label: 'Centered Layout', desc: 'Center the editor when a single group is open', type: 'bool' },
+    { k: 'terminalFontSize', label: 'Terminal Font Size', desc: 'Font size of the integrated terminal', type: 'num', min: 9, max: 24 },
+    { k: 'doNotDisturb', label: 'Do Not Disturb', desc: 'Only show error notifications as pop-ups (all are kept in the notification center)', type: 'bool' },
   ]],
   ['Cursor', [
     { k: 'cursorStyle', label: 'Cursor Style', desc: 'Shape of the cursor', type: 'select', opts: ['line', 'block', 'underline', 'line-thin'] },
     { k: 'cursorBlinking', label: 'Cursor Blinking', desc: 'Cursor animation style', type: 'select', opts: ['blink', 'smooth', 'phase', 'expand', 'solid'] },
+    { k: 'cursorSurroundingLines', label: 'Cursor Surrounding Lines', desc: 'Minimum visible lines above/below the cursor', type: 'num', min: 0, max: 20 },
+    { k: 'multiCursorModifier', label: 'Multi-Cursor Modifier', desc: 'Modifier used to add cursors with the mouse', type: 'select', opts: ['alt', 'ctrlCmd'] },
     { k: 'smoothCaret', label: 'Smooth Caret Animation', desc: 'Animate cursor movement', type: 'bool' },
     { k: 'smoothScrolling', label: 'Smooth Scrolling', desc: 'Animate scrolling', type: 'bool' },
     { k: 'mouseWheelZoom', label: 'Mouse Wheel Zoom', desc: 'Ctrl+wheel zooms the font', type: 'bool' },
@@ -43,25 +61,56 @@ const SECTIONS: [string, Field[]][] = [
     { k: 'tabSize', label: 'Tab Size', desc: 'Number of spaces per tab', type: 'num', min: 1, max: 8 },
     { k: 'insertSpaces', label: 'Insert Spaces', desc: 'Use spaces instead of tabs', type: 'bool' },
     { k: 'wordWrap', label: 'Word Wrap', desc: 'Wrap long lines', type: 'bool' },
+    { k: 'wordWrapColumn', label: 'Word Wrap Column', desc: 'Column used by bounded word wrap', type: 'num', min: 20, max: 400 },
     { k: 'autoClosingBrackets', label: 'Auto Close Brackets', desc: 'Auto insert closing brackets', type: 'bool' },
+    { k: 'autoClosingQuotes', label: 'Auto Close Quotes', desc: 'Auto insert closing quotes', type: 'bool' },
+    { k: 'autoSurround', label: 'Auto Surround', desc: 'Wrap selections when typing brackets or quotes', type: 'bool' },
     { k: 'linkedEditing', label: 'Linked Editing', desc: 'Rename paired HTML tags together', type: 'bool' },
+    { k: 'emmet', label: 'Emmet', desc: 'Expand Emmet abbreviations in HTML, templates & CSS', type: 'bool' },
+    { k: 'emmetJsx', label: 'Emmet in JSX', desc: 'Also offer Emmet abbreviations in JavaScript/TypeScript files', type: 'bool' },
     { k: 'formatOnPaste', label: 'Format On Paste', desc: 'Format pasted content', type: 'bool' },
+    { k: 'formatOnType', label: 'Format On Type', desc: 'Format the line after typing', type: 'bool' },
     { k: 'folding', label: 'Code Folding', desc: 'Enable folding', type: 'bool' },
     { k: 'scrollBeyondLastLine', label: 'Scroll Beyond Last Line', desc: 'Allow scrolling past the end', type: 'bool' },
     { k: 'bracketPairs', label: 'Bracket Pair Colorization', desc: 'Color matching brackets', type: 'bool' },
     { k: 'indentGuides', label: 'Indent Guides', desc: 'Show indentation guides', type: 'bool' },
     { k: 'stickyScroll', label: 'Sticky Scroll', desc: 'Pin scope headers when scrolling', type: 'bool' },
     { k: 'colorDecorators', label: 'Color Decorators', desc: 'Inline color swatches', type: 'bool' },
+    { k: 'occurrencesHighlight', label: 'Occurrences Highlight', desc: 'Highlight other occurrences of the symbol under the cursor', type: 'bool' },
+    { k: 'selectionHighlight', label: 'Selection Highlight', desc: 'Highlight matches of the current selection', type: 'bool' },
+    { k: 'links', label: 'Links', desc: 'Make URLs clickable (Ctrl+click)', type: 'bool' },
+    { k: 'copyWithSyntaxHighlighting', label: 'Copy With Syntax Highlighting', desc: 'Copy rich text with colors', type: 'bool' },
   ]],
   ['IntelliSense', [
     { k: 'quickSuggestions', label: 'Quick Suggestions', desc: 'Show suggestions while typing', type: 'bool' },
+    { k: 'wordBasedSuggestions', label: 'Word Based Suggestions', desc: 'Suggest words from documents (plus language keywords & symbols)', type: 'select', opts: ['off', 'currentDocument', 'matchingDocuments', 'allDocuments'] },
+    { k: 'snippetSuggestions', label: 'Snippet Suggestions', desc: 'Where snippets appear in the suggestion list', type: 'select', opts: ['top', 'bottom', 'inline', 'none'] },
+    { k: 'acceptSuggestionOnEnter', label: 'Accept Suggestion On Enter', desc: 'Accept suggestions with Enter', type: 'select', opts: ['on', 'smart', 'off'] },
+    { k: 'tabCompletion', label: 'Tab Completion', desc: 'Insert best match / snippet with Tab', type: 'select', opts: ['off', 'on', 'onlySnippets'] },
     { k: 'parameterHints', label: 'Parameter Hints', desc: 'Signature help popups', type: 'bool' },
+    { k: 'hover', label: 'Hover', desc: 'Show hover information', type: 'bool' },
     { k: 'typeCheck', label: 'TypeScript Semantic Checks', desc: 'Report type errors in Problems', type: 'bool' },
   ]],
-  ['Files & Running', [
+  ['Formatting', [
+    { k: 'prettier', label: 'Use Prettier', desc: 'Format JS/TS/JSON/CSS/HTML/Vue/Markdown/YAML/GraphQL with Prettier (loaded on demand)', type: 'bool' },
+    { k: 'prettierPrintWidth', label: 'Prettier: Print Width', desc: 'Line length Prettier wraps at', type: 'num', min: 40, max: 240 },
+    { k: 'prettierSemi', label: 'Prettier: Semicolons', desc: 'Print semicolons at the ends of statements', type: 'bool' },
+    { k: 'prettierSingleQuote', label: 'Prettier: Single Quotes', desc: 'Prefer single quotes', type: 'bool' },
+    { k: 'prettierTrailingComma', label: 'Prettier: Trailing Commas', desc: 'Where to print trailing commas', type: 'select', opts: ['all', 'es5', 'none'] },
+    { k: 'sqlKeywordCase', label: 'SQL Keyword Case', desc: 'Keyword case used by the SQL formatter', type: 'select', opts: ['upper', 'lower', 'preserve'] },
+  ]],
+  ['Files', [
     { k: 'autoSave', label: 'Auto Save', desc: 'Save automatically after each change', type: 'bool' },
     { k: 'formatOnSave', label: 'Format On Save', desc: 'Format document when saving', type: 'bool' },
+    { k: 'trimTrailingWhitespace', label: 'Trim Trailing Whitespace', desc: 'Remove trailing whitespace when saving', type: 'bool' },
+    { k: 'insertFinalNewline', label: 'Insert Final Newline', desc: 'Ensure files end with a newline when saving', type: 'bool' },
+    { k: 'trimFinalNewlines', label: 'Trim Final Newlines', desc: 'Remove extra blank lines at the end when saving', type: 'bool' },
+    { k: 'autoDetectLanguage', label: 'Detect Language From Content', desc: 'Use shebangs and content heuristics for ambiguous extensions (.m, .pl, .h, .v …)', type: 'bool' },
+    { k: 'localHistory', label: 'Local History', desc: 'Keep snapshots on save and before destructive changes (Timeline)', type: 'bool' },
+    { k: 'localHistoryMax', label: 'Local History: Max Entries', desc: 'Snapshots kept per file', type: 'num', min: 1, max: 200 },
     { k: 'confirmDelete', label: 'Confirm Delete', desc: 'Ask before deleting files', type: 'bool' },
+  ]],
+  ['Running', [
     { k: 'clearOutputOnRun', label: 'Clear Output On Run', desc: 'Clear the output before each run', type: 'bool' },
     { k: 'previewAutoRefresh', label: 'Preview Auto Refresh', desc: 'Refresh live preview on each change', type: 'bool' },
   ]],
@@ -95,7 +144,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                   const changed = v !== (DEFAULT_SETTINGS as any)[f.k];
                   return (
                     <div key={f.k} className={`pl-3 border-l-2 ${changed ? 'border-[var(--accent)]' : 'border-transparent'}`}>
-                      <div className="text-[13px] font-semibold">{f.label} <span className="font-mono text-[10px] text-[var(--muted)] font-normal">editor.{f.k}</span></div>
+                      <div className="text-[13px] font-semibold">{f.label} <span className="font-mono text-[10px] text-[var(--muted)] font-normal">{n.toLowerCase()}.{f.k}</span></div>
                       {f.type === 'bool' ? (
                         <label className="flex items-center gap-2 text-[12px] text-[var(--muted)] mt-1 cursor-pointer"><input type="checkbox" checked={v} onChange={() => ide.setSetting(f.k, !v as any)} className="accent-[var(--accent)]" /> {f.desc}</label>
                       ) : (
@@ -104,6 +153,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                           {f.type === 'select' && <select value={v} onChange={(e) => ide.setSetting(f.k, e.target.value as any)} className={input + ' min-w-[200px]'}>{f.opts!.map((o) => <option key={o} value={o}>{THEMES.find((t) => t.id === o)?.name ?? o}</option>)}</select>}
                           {f.type === 'num' && <input type="number" min={f.min} max={f.max} value={v} onChange={(e) => ide.setSetting(f.k, Math.max(f.min ?? 0, Math.min(f.max ?? 999, +e.target.value || 0)) as any)} className={input + ' w-24'} />}
                           {f.type === 'text' && <input value={v} onChange={(e) => ide.setSetting(f.k, e.target.value as any)} className={input + ' w-full'} />}
+                          {changed && <button onClick={() => ide.setSetting(f.k, (DEFAULT_SETTINGS as any)[f.k])} className="ml-2 text-[11px] text-[var(--muted)] underline">reset</button>}
                         </>
                       )}
                     </div>
@@ -122,7 +172,7 @@ const EDITOR_SHORTCUTS: [string, string][] = [
   ['Toggle line comment', 'Ctrl+/'], ['Toggle block comment', 'Shift+Alt+A'], ['Find', 'Ctrl+F'], ['Replace', 'Ctrl+H'],
   ['Add cursor above / below', 'Ctrl+Alt+↑/↓'], ['Select next occurrence', 'Ctrl+D'], ['Select all occurrences', 'Ctrl+Shift+L'],
   ['Move line up / down', 'Alt+↑/↓'], ['Copy line up / down', 'Shift+Alt+↑/↓'], ['Delete line', 'Ctrl+Shift+K'],
-  ['Go to definition', 'F12'], ['Peek definition', 'Alt+F12'], ['Rename symbol', 'F2'], ['Go to symbol', 'Ctrl+Shift+O'],
+  ['Go to definition', 'F12'], ['Peek definition', 'Alt+F12'], ['Rename symbol', 'F2'], ['Quick outline', 'Ctrl+Shift+O'], ['Emmet: expand abbreviation', 'Tab (in suggestion list)'],
   ['Trigger suggest', 'Ctrl+Space'], ['Quick fix', 'Ctrl+.'], ['Fold / Unfold', 'Ctrl+Shift+[ / ]'], ['Expand selection', 'Shift+Alt+→'],
   ['Column (box) selection', 'Shift+Alt+Drag'], ['Indent / Outdent', 'Tab / Shift+Tab'], ['Next problem', 'F8'],
 ];
@@ -130,17 +180,81 @@ const EDITOR_SHORTCUTS: [string, string][] = [
 export function ShortcutsModal({ onClose }: { onClose: () => void }) {
   const ide = useIDE();
   const [q, setQ] = useState('');
-  const rows: [string, string, string][] = [
-    ...ide.commands.filter((c) => c.key || c.hint).map((c) => [c.category, c.label, (c.key ?? c.hint)!] as [string, string, string]),
-    ...EDITOR_SHORTCUTS.map(([l, k]) => ['Editor', l, k] as [string, string, string]),
-  ].filter((r) => !q || r.join(' ').toLowerCase().includes(q.toLowerCase()));
+  const [onlyBound, setOnlyBound] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [pending, setPending] = useState('');
+  const kb = ide.settings.keybindings ?? {};
+  const setKb = (next: Record<string, string>) => ide.setSetting('keybindings', next);
+  const ql = q.toLowerCase();
+  const cmds = ide.commands.filter((c) => (!onlyBound || c.key || c.hint) && (!ql || `${c.category} ${c.label} ${c.key ?? ''} ${c.hint ?? ''} ${c.id}`.toLowerCase().includes(ql)));
+  const editorRows = EDITOR_SHORTCUTS.filter((r) => !ql || r.join(' ').toLowerCase().includes(ql));
+  const conflicts = (key: string, id: string) => ide.commands.filter((c) => c.id !== id && c.key && normKey(c.key) === normKey(key));
+  const commit = (id: string, key: string) => {
+    const def = ide.commands.find((c) => c.id === id)?.defaultKey ?? '';
+    const next = { ...kb };
+    if (normKey(key || '') === normKey(def || '') && key) delete next[id];
+    else next[id] = key;
+    setKb(next);
+    setEditing(null);
+    setPending('');
+  };
   return (
     <Modal title="Keyboard Shortcuts" onClose={onClose} wide>
-      <div className="p-3 border-b border-[var(--border)]"><input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Type to search keybindings" className="w-full h-7 px-2 text-[13px] bg-[var(--input)] border border-[var(--border)] rounded-sm outline-none focus:border-[var(--accent)]" /></div>
+      <div className="p-3 border-b border-[var(--border)] flex gap-2 items-center">
+        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Search ${ide.commands.length} commands and keybindings`} className="flex-1 h-7 px-2 text-[13px] bg-[var(--input)] border border-[var(--border)] rounded-sm outline-none focus:border-[var(--accent)]" />
+        <label className="flex items-center gap-1.5 text-[12px] text-[var(--muted)] cursor-pointer whitespace-nowrap"><input type="checkbox" checked={onlyBound} onChange={() => setOnlyBound(!onlyBound)} className="accent-[var(--accent)]" /> Only with keybinding</label>
+        {Object.keys(kb).length > 0 && <button onClick={() => { if (confirm('Reset all custom keybindings?')) setKb({}); }} className="flex items-center gap-1 px-2 h-7 text-[12px] rounded-sm border border-[var(--border)] hover:bg-[var(--hover)]"><RotateCcw size={12} /> Reset all ({Object.keys(kb).length})</button>}
+      </div>
+      <div className="px-4 py-1.5 text-[11px] text-[var(--muted)] border-b border-[var(--border)]">Click a keybinding to change it, press the new combination, then Enter to save (Escape cancels, Backspace removes). Keys reserved by the browser (Ctrl+T, Ctrl+W, Ctrl+N…) cannot be captured.</div>
       <div className="overflow-auto">
         <table className="w-full text-[13px]">
-          <thead className="sticky top-0 bg-[var(--side)]"><tr className="text-left text-[11px] uppercase text-[var(--muted)]"><th className="px-4 py-1.5">Command</th><th className="px-4">Keybinding</th><th className="px-4">Category</th></tr></thead>
-          <tbody>{rows.map((r, i) => <tr key={i} className="hover:bg-[var(--hover)] odd:bg-[var(--bg)]/40"><td className="px-4 py-1">{r[1]}</td><td className="px-4"><Kbd>{r[2]}</Kbd></td><td className="px-4 text-[var(--muted)]">{r[0]}</td></tr>)}</tbody>
+          <thead className="sticky top-0 bg-[var(--side)] z-10"><tr className="text-left text-[11px] uppercase text-[var(--muted)]"><th className="px-4 py-1.5">Command</th><th className="px-4">Keybinding</th><th className="px-4">Source</th><th className="px-2 w-16" /></tr></thead>
+          <tbody>
+            {cmds.map((c) => {
+              const user = Object.prototype.hasOwnProperty.call(kb, c.id);
+              const isEditing = editing === c.id;
+              const conf = isEditing && pending ? conflicts(pending, c.id) : [];
+              return (
+                <tr key={c.id} className="group hover:bg-[var(--hover)] odd:bg-[var(--bg)]/40">
+                  <td className="px-4 py-1"><span className="text-[var(--muted)]">{c.category}:</span> {c.label}</td>
+                  <td className="px-4 py-0.5">
+                    {isEditing ? (
+                      <div
+                        tabIndex={0}
+                        data-key-capture
+                        ref={(el) => el?.focus()}
+                        onKeyDown={(e) => {
+                          e.preventDefault(); e.stopPropagation();
+                          if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return;
+                          if (e.key === 'Escape') { setEditing(null); setPending(''); return; }
+                          if (e.key === 'Enter' && pending) { commit(c.id, pending); return; }
+                          if (e.key === 'Backspace' && !e.ctrlKey && !e.altKey) { commit(c.id, ''); return; }
+                          setPending(keyString(e));
+                        }}
+                        onBlur={() => { setEditing(null); setPending(''); }}
+                        className="inline-flex flex-col gap-0.5 px-2 py-1 rounded-sm border border-[var(--accent)] bg-[var(--input)] outline-none min-w-[180px]"
+                      >
+                        <span className="text-[12px]">{pending ? <Kbd>{pending}</Kbd> : <span className="text-[var(--muted)]">Press desired key combination…</span>}</span>
+                        {conf.length > 0 && <span className="text-[11px] text-amber-400">Also bound to: {conf.map((x) => x.label).join(', ')}</span>}
+                      </div>
+                    ) : (
+                      <button onClick={() => { setEditing(c.id); setPending(''); }} title="Change keybinding" className="min-h-[22px] min-w-[80px] text-left">
+                        {c.key ? <Kbd>{c.key}</Kbd> : c.hint ? <span className="opacity-70"><Kbd>{c.hint}</Kbd></span> : <span className="text-[11px] text-[var(--muted)] opacity-0 group-hover:opacity-100">+ add</span>}
+                      </button>
+                    )}
+                  </td>
+                  <td className="px-4 text-[12px] text-[var(--muted)]">{user ? 'User' : c.key ? 'Default' : c.hint ? 'Editor' : ''}</td>
+                  <td className="px-2 text-right whitespace-nowrap">
+                    {user && <button title="Reset to default" onClick={() => { const n = { ...kb }; delete n[c.id]; setKb(n); }} className="p-0.5 text-[var(--muted)] hover:text-[var(--fg)]"><RotateCcw size={12} /></button>}
+                    {c.key && <button title="Remove keybinding" onClick={() => commit(c.id, '')} className="p-0.5 text-[var(--muted)] hover:text-red-400 opacity-0 group-hover:opacity-100"><X size={12} /></button>}
+                  </td>
+                </tr>
+              );
+            })}
+            {editorRows.map(([l, k]) => (
+              <tr key={'e' + l} className="hover:bg-[var(--hover)] odd:bg-[var(--bg)]/40"><td className="px-4 py-1"><span className="text-[var(--muted)]">Editor:</span> {l}</td><td className="px-4"><Kbd>{k}</Kbd></td><td className="px-4 text-[12px] text-[var(--muted)]">Monaco</td><td /></tr>
+            ))}
+          </tbody>
         </table>
       </div>
     </Modal>
