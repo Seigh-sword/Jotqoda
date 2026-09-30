@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0d1117; --side: #010409; --act: #010409; --panel: #0d1117; --border: #21262d; --fg: #e6edf3;
+  --muted: #7d8590; --accent: #8b5cf6; --tab: #010409; --hover: #161b22; --input: #161b22; --status: #6d28d9; --statusFg: #fff;
+}
+
+html, body, #root { height: 100%; margin: 0; overflow: hidden; }
+body { background: var(--bg); color: var(--fg); -webkit-font-smoothing: antialiased; }
+
+* { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--muted) 45%, transparent) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--muted) 35%, transparent); border: 2px solid transparent; background-clip: padding-box; border-radius: 8px; }
+*::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--muted) 60%, transparent); }
+*::-webkit-scrollbar-track, *::-webkit-scrollbar-corner { background: transparent; }
+
+.tabs-scroll { scrollbar-width: none; }
+.tabs-scroll::-webkit-scrollbar { height: 0; }
+
+.sash-v { width: 4px; margin: 0 -2px; z-index: 10; cursor: col-resize; flex-shrink: 0; position: relative; transition: background .15s .1s; }
+.sash-h { height: 4px; margin: -2px 0; z-index: 10; cursor: row-resize; flex-shrink: 0; position: relative; transition: background .15s .1s; }
+.sash-v:hover, .sash-h:hover { background: var(--accent); }
+body.dragging iframe, body.dragging .monaco-editor { pointer-events: none; }
+body.dragging { user-select: none; }
+
+select, input, textarea, button { color: inherit; font: inherit; }
+select option { background: var(--side); }
+
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px) scale(.97); } to { opacity: 1; transform: none; } }
+.toast-in { animation: toast-in .18s ease-out; }
+
+.monaco-editor .suggest-widget, .monaco-editor .monaco-hover { border-radius: 6px; overflow: hidden; }

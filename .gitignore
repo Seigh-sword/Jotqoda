@@ -1,0 +1,52 @@
+# IMPORTANT!!! that one time I forgot to add this into my gitignore and, crashed my laptop is my lession.
+node_modules/
+
+# dists
+dist/
+build/
+*.local
+
+# vscode
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# operting system fiiles
+.DS_Store
+Thumbs.db
+
+# outputs logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# converge
+coverage/
+.nyc_output/
+
+# env
+.env
+.env.local
+.env.*.local
+
+# cache
+.cache/
+.eslintcache
+.stylelintcache
+
+# TypeScript
+*.tsbuildinfo
+
+# Viteee
+vite.config.ts.timestamp-*
+
+# dist html
+dist/index.html
+
+# I really hate to make this file... but its needed
+# You know what? why do we need this! my fingers are tired from writing the IDE and I need to update thiz!!!
+# thats a really good tingle about that;
