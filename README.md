@@ -9,8 +9,6 @@
 
 JotQoda is a browser-based coding workspace built with React, TypeScript, Vite, and the Monaco Editor. It brings editing, lightweight in-browser execution, previews, file management, and developer utilities together in a single-page interface.
 
-> **Project size:** the application currently contains more than 2,000 lines of TypeScript, TSX, and CSS under `src/` (3,963 non-empty source lines when this README was written). The source-lines badge is a point-in-time count and should be refreshed if you want it to remain exact.
-
 ## Contents
 
 - [Highlights](#highlights)
@@ -61,6 +59,8 @@ Panel sizes can be adjusted by dragging the separators. Use Zen Mode to hide the
 
 ## Getting started
 
+you can, install the editor locally by;
+
 ### Requirements
 
 - Node.js **20.19 or newer**, or **22.12 or newer**.
@@ -69,6 +69,12 @@ Panel sizes can be adjusted by dragging the separators. Use Zen Mode to hide the
 - An internet connection for loading browser-hosted dependencies such as Monaco, Pyodide, SQL.js, and web fonts.
 
 ### Install and run locally
+
+clone the repo.
+
+```sh
+git clone https://github.com/Seigh-sword/Jotqoda/
+```
 
 From the repository root:
 
